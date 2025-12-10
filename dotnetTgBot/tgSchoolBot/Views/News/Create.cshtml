@@ -1,0 +1,39 @@
+@model News
+@{
+    ViewData["Title"] = "Создать новость";
+}
+
+<h2>Создать новость или отчет</h2>
+
+<form method="post" action="/News/Create">
+    @Html.AntiForgeryToken()
+
+    <div class="mb-3">
+        <label for="ClassId" class="form-label">Класс</label>
+        @Html.DropDownList("ClassId", (IEnumerable<SelectListItem>)ViewBag.Classes, new { @class = "form-select", required = "required" })
+    </div>
+    
+    <div class="mb-3">
+        <label for="Type" class="form-label">Тип</label>
+        <select class="form-select" id="Type" name="Type" required>
+            <option value="News">📰 Новость</option>
+            <option value="Report">📊 Отчет</option>
+        </select>
+    </div>
+
+    <div class="mb-3">
+        <label for="Title" class="form-label">Заголовок</label>
+        <input type="text" class="form-control" id="Title" name="Title" required>
+    </div>
+
+    <div class="mb-3">
+        <label for="Content" class="form-label">Содержание</label>
+        <textarea class="form-control" id="Content" name="Content" rows="10" required></textarea>
+    </div>
+
+    <div class="d-flex gap-2">
+        <button type="submit" class="btn btn-primary">Опубликовать</button>
+        <a href="/Home" class="btn btn-secondary">Отмена</a>
+    </div>
+</form>
+

@@ -1,0 +1,54 @@
+@model List<ParentVerification>
+@{
+    ViewData["Title"] = "Верификации";
+}
+
+<h2>Заявки на верификацию</h2>
+<div class="mb-3">
+    <form method="get" action="/Verifications/Index" class="d-flex align-items-center gap-2">
+        <label for="SelectedClassId" class="form-label mb-0">Класс:</label>
+        @Html.DropDownList("classId", new SelectList(ViewBag.Classes ?? new List<Class>(), "Id", "Name", ViewBag.SelectedClassId), new { @class = "form-select", onchange = "this.form.submit()" })
+        <noscript><button type="submit" class="btn btn-primary btn-sm">Выбрать</button></noscript>
+    </form>
+</div>
+
+@if (Model != null && Model.Any())
+{
+    <div class="row">
+        @foreach (var verification in Model)
+        {
+            <div class="col-md-6 mb-3">
+                <div class="card">
+                    <div class="card-header">
+                        <strong>Заявка #@verification.Id</strong>
+                        <small class="text-muted float-end">@verification.CreatedAt.ToString("dd.MM.yyyy HH:mm")</small>
+                    </div>
+                    <div class="card-body">
+                        <p><strong>ФИО:</strong> @verification.FullName</p>
+                        <p><strong>Телефон:</strong> @verification.PhoneNumber</p>
+                        <p><strong>Telegram User ID:</strong> @verification.TelegramUserId</p>
+                        <div class="btn-group w-100">
+                            <form method="post" action="/Verifications/Approve/@verification.Id" class="flex-fill">
+                                @Html.AntiForgeryToken()
+                                <button type="submit" class="btn btn-success w-100">
+                                    <i class="bi bi-check-circle"></i> Одобрить
+                                </button>
+                            </form>
+                            <form method="post" action="/Verifications/Reject/@verification.Id" class="flex-fill">
+                                @Html.AntiForgeryToken()
+                                <button type="submit" class="btn btn-danger w-100" onclick="return confirm('Отклонить заявку?')">
+                                    <i class="bi bi-x-circle"></i> Отклонить
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+}
+else
+{
+    <div class="alert alert-info">Нет заявок на верификацию</div>
+}
+

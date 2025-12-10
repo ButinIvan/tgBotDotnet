@@ -1,6 +1,0 @@
-@dotnetTgBot_HostAddress = http://localhost:5183
-
-GET {{dotnetTgBot_HostAddress}}/weatherforecast/
-Accept: application/json
-
-###

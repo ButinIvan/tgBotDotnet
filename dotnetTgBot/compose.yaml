@@ -1,0 +1,33 @@
+﻿services:
+  db:
+    image: postgres:latest
+    container_name: postgres
+    restart: always
+    environment:
+      POSTGRES_DB: ${DB_NAME}
+      POSTGRES_USER: ${DB_USERNAME}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    ports:
+      - "5433:5432"
+  
+  tgschoolbot:
+    image: tgschoolbot
+    build:
+      context: .
+      dockerfile: tgSchoolBot/Dockerfile
+    container_name: tgSchoolBotApi
+    restart: unless-stopped
+    depends_on:
+      - db
+    ports:
+      - "5010:5010"
+    environment:
+      - CONNECTION_STRING=Host=db;Port=5432;Database=${DB_NAME};Username=${DB_USERNAME};Password=${DB_PASSWORD}
+      - ASPNETCORE_ENVIRONMENT=Development
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      - ASPNETCORE_URLS=http://+:5010
+
+volumes:
+  db_data:

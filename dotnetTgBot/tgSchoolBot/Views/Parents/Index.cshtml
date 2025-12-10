@@ -1,0 +1,90 @@
+@model List<User>
+@{
+    ViewData["Title"] = "Родители";
+    var isAdmin = ViewBag.IsAdmin as bool? ?? false;
+}
+
+<h2>Родители класса</h2>
+<div class="mb-3">
+    <form method="get" action="/Parents/Index" class="d-flex align-items-center gap-2">
+        <label for="SelectedClassId" class="form-label mb-0">Класс:</label>
+        @Html.DropDownList("classId", new SelectList(ViewBag.Classes ?? new List<Class>(), "Id", "Name", ViewBag.SelectedClassId), new { @class = "form-select", onchange = "this.form.submit()" })
+        <noscript><button type="submit" class="btn btn-primary btn-sm">Выбрать</button></noscript>
+    </form>
+</div>
+
+@if (TempData["Error"] != null)
+{
+    <div class="alert alert-danger">@TempData["Error"]</div>
+}
+@if (TempData["Success"] != null)
+{
+    <div class="alert alert-success">@TempData["Success"]</div>
+}
+
+@if (Model != null && Model.Any())
+{
+    <div class="table-responsive">
+        <table class="table table-striped">
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>ФИО</th>
+                    <th>Телефон</th>
+                    <th>Telegram User ID</th>
+                    <th>Роль</th>
+                    <th>Действия</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var parent in Model)
+                {
+                    <tr>
+                        <td>@parent.Id</td>
+                        <td>@(parent.FullName ?? $"{parent.FirstName} {parent.LastName}")</td>
+                        <td>@(parent.PhoneNumber ?? "не указан")</td>
+                        <td>@parent.TelegramUserId</td>
+                        <td>@parent.Role</td>
+                        <td>
+                            @if (isAdmin)
+                            {
+                                <div class="d-flex gap-2">
+                                    <form method="post" action="/Parents/SetRole" class="d-inline">
+                                        @Html.AntiForgeryToken()
+                                        <input type="hidden" name="id" value="@parent.Id" />
+                                        <input type="hidden" name="selectedClassId" value="@ViewBag.SelectedClassId" />
+                                        <input type="hidden" name="role" value="Moderator" />
+                                        <button type="submit" class="btn btn-sm btn-outline-primary">Сделать модератором</button>
+                                    </form>
+                                    <form method="post" action="/Parents/SetRole" class="d-inline">
+                                        @Html.AntiForgeryToken()
+                                        <input type="hidden" name="id" value="@parent.Id" />
+                                        <input type="hidden" name="selectedClassId" value="@ViewBag.SelectedClassId" />
+                                        <input type="hidden" name="role" value="Parent" />
+                                        <button type="submit" class="btn btn-sm btn-outline-secondary">Сделать родителем</button>
+                                    </form>
+                                    <form method="post" action="/Parents/RemoveFromClass" class="d-inline">
+                                        @Html.AntiForgeryToken()
+                                        <input type="hidden" name="id" value="@parent.Id" />
+                                        <input type="hidden" name="selectedClassId" value="@ViewBag.SelectedClassId" />
+                                        <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('Удалить из класса?')">Удалить</button>
+                                    </form>
+                                </div>
+                            }
+                            else
+                            {
+                                <span class="text-muted">Только админ</span>
+                            }
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}
+else
+{
+    <div class="alert alert-info">Нет родителей для выбранного класса.</div>
+}
+ 
+
