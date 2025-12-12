@@ -28,6 +28,93 @@ public class UpdateHandler
         public string Role { get; set; } = string.Empty;
     }
 
+    private async Task SendNewsPage(long chatId, int messageId, long userTelegramId, int classId, int page, CancellationToken cancellationToken)
+    {
+        const int pageSize = 5;
+        const int maxPages = 10;
+
+        // Проверка доступа: только если пользователь имеет отношение к классу
+        var user = await _dbContext.Users.FirstOrDefaultAsync(u => u.TelegramUserId == userTelegramId, cancellationToken);
+        if (user == null) return;
+
+        var hasAccess = (user.Role == UserRole.Admin && await _dbContext.Classes.AnyAsync(c => c.Id == classId && c.AdminTelegramUserId == user.TelegramUserId, cancellationToken))
+                        || (user.Role == UserRole.Moderator && user.ClassId == classId)
+                        || (user.Role == UserRole.Parent && user.IsVerified && (
+                            user.ClassId == classId ||
+                            await _dbContext.ParentClassLinks.AnyAsync(l => l.UserId == user.Id && l.ClassId == classId, cancellationToken)
+                        ));
+        if (!hasAccess)
+        {
+            await _botClient.SendTextMessageAsync(chatId, "У вас нет доступа к новостям этого класса.", cancellationToken: cancellationToken);
+            return;
+        }
+
+        var newsQuery = _dbContext.News
+            .Where(n => n.ClassId == classId)
+            .OrderByDescending(n => n.CreatedAt);
+
+        var totalCount = await newsQuery.CountAsync(cancellationToken);
+        var totalPages = (int)Math.Ceiling(totalCount / (double)pageSize);
+        totalPages = Math.Min(totalPages, maxPages);
+
+        if (totalPages == 0)
+        {
+            await _botClient.SendTextMessageAsync(chatId, "Пока нет новостей или отчетов.", cancellationToken: cancellationToken);
+            return;
+        }
+
+        page = Math.Max(1, Math.Min(page, totalPages));
+        var skip = (page - 1) * pageSize;
+
+        var news = await newsQuery
+            .Skip(skip)
+            .Take(pageSize)
+            .ToListAsync(cancellationToken);
+
+        var pageText = string.Join("\n\n", news.Select((item, idx) =>
+        {
+            var localDate = item.CreatedAt.AddHours(3); // UTC+3
+            var content = (item.Content ?? string.Empty).TrimEnd();
+            return $"<b>{idx + 1}. {item.Title}</b>\n\n{content}\n\nДата: {localDate:dd.MM.yyyy HH:mm}";
+        }));
+
+        var keyboard = BuildNewsPaginationKeyboard(classId, page, totalPages);
+
+        if (messageId > 0)
+        {
+            await _botClient.EditMessageTextAsync(
+                chatId,
+                messageId: messageId,
+                text: pageText,
+                parseMode: ParseMode.Html,
+                replyMarkup: keyboard,
+                cancellationToken: cancellationToken);
+        }
+        else
+        {
+            await _botClient.SendTextMessageAsync(
+                chatId,
+                pageText,
+                parseMode: ParseMode.Html,
+                replyMarkup: keyboard,
+                cancellationToken: cancellationToken);
+        }
+    }
+
+    private InlineKeyboardMarkup BuildNewsPaginationKeyboard(int classId, int currentPage, int totalPages)
+    {
+        if (totalPages <= 1) return null!;
+
+        var buttons = new List<InlineKeyboardButton>();
+
+        if (currentPage > 1)
+            buttons.Add(InlineKeyboardButton.WithCallbackData("« Пред", $"news_prev_{classId}_{currentPage}"));
+        if (currentPage < totalPages)
+            buttons.Add(InlineKeyboardButton.WithCallbackData("След »", $"news_next_{classId}_{currentPage}"));
+
+        return new InlineKeyboardMarkup(buttons);
+    }
+
     public UpdateHandler(
         ITelegramBotClient botClient,
         ApplicationDbContext dbContext,
@@ -144,18 +231,22 @@ public class UpdateHandler
                 break;
 
             case "/createclass":
-                // Разрешаем только после ввода ФИО/телефона (регистрация)
+                // Запускаем пошаговый ввод названия класса
                 if (string.IsNullOrWhiteSpace(user.FullName) || string.IsNullOrWhiteSpace(user.PhoneNumber))
                 {
                     await _botClient.SendTextMessageAsync(
                         chatId,
-                        "Сначала пройдите регистрацию: введите ФИО и номер телефона командой /register.",
+                        "Сначала пройдите регистрацию: /register (ФИО и телефон).",
                         cancellationToken: cancellationToken);
+                    return;
                 }
-                else
+
+                _userStates[user.TelegramUserId] = new UserState
                 {
-                    await HandleCreateClassCommand(user, message, cancellationToken);
-                }
+                    Step = VerificationStep.WaitingForClassNameCreate,
+                    ClassAction = ClassAction.CreateClass
+                };
+                await _botClient.SendTextMessageAsync(chatId, "Введите название класса:", cancellationToken: cancellationToken);
                 break;
 
             case "/createnews":
@@ -166,8 +257,8 @@ public class UpdateHandler
                 break;
 
             case "/viewnews":
-                if (user.Role == UserRole.Parent && user.IsVerified)
-                    await HandleViewNewsCommand(user, message, cancellationToken);
+                if ((user.Role == UserRole.Admin || user.Role == UserRole.Moderator) || (user.Role == UserRole.Parent && user.IsVerified))
+                    await HandleViewNewsCommand(user, parts, message, cancellationToken);
                 else
                     await _botClient.SendTextMessageAsync(chatId, "У вас нет доступа. Пожалуйста, пройдите верификацию.", cancellationToken: cancellationToken);
                 break;
@@ -177,7 +268,21 @@ public class UpdateHandler
                 break;
 
             case "/requestclass":
-                await HandleRequestClassCommand(user, message, cancellationToken);
+                if (string.IsNullOrWhiteSpace(user.FullName) || string.IsNullOrWhiteSpace(user.PhoneNumber))
+                {
+                    await _botClient.SendTextMessageAsync(
+                        chatId,
+                        "Сначала пройдите регистрацию: /register (ФИО и телефон).",
+                        cancellationToken: cancellationToken);
+                    return;
+                }
+
+                _userStates[user.TelegramUserId] = new UserState
+                {
+                    Step = VerificationStep.WaitingForClassNameRequest,
+                    ClassAction = ClassAction.RequestClass
+                };
+                await _botClient.SendTextMessageAsync(chatId, "Введите название класса, к которому хотите присоединиться:", cancellationToken: cancellationToken);
                 break;
 
             case "/verifications":
@@ -190,6 +295,20 @@ public class UpdateHandler
             case "/parents":
                 if (user.Role == UserRole.Admin)
                     await HandleParentsCommand(user, parts, message, cancellationToken);
+                else
+                    await _botClient.SendTextMessageAsync(chatId, "У вас нет прав для выполнения этой команды.", cancellationToken: cancellationToken);
+                break;
+
+            case "/moderators":
+                if (user.Role == UserRole.Admin || user.Role == UserRole.Moderator)
+                    await HandleListModeratorsCommand(user, message, cancellationToken);
+                else
+                    await _botClient.SendTextMessageAsync(chatId, "У вас нет прав для выполнения этой команды.", cancellationToken: cancellationToken);
+                break;
+
+            case "/addmoderator":
+                if (user.Role == UserRole.Admin)
+                    await HandleAddModeratorCommand(user, message, cancellationToken);
                 else
                     await _botClient.SendTextMessageAsync(chatId, "У вас нет прав для выполнения этой команды.", cancellationToken: cancellationToken);
                 break;
@@ -521,6 +640,114 @@ public class UpdateHandler
                 // Удаляем состояние
                 _userStates.TryRemove(user.TelegramUserId, out _);
                 break;
+
+            case VerificationStep.WaitingForClassNameCreate:
+                if (string.IsNullOrWhiteSpace(message.Text))
+                {
+                    await _botClient.SendTextMessageAsync(chatId, "Введите название класса.", cancellationToken: cancellationToken);
+                    return;
+                }
+
+                var classNameCreate = message.Text.Trim();
+
+                // Проверяем лимит: не более 10 классов на одного админа
+                var adminClassesCount = await _dbContext.Classes
+                    .CountAsync(c => c.AdminTelegramUserId == user.TelegramUserId, cancellationToken);
+
+                if (adminClassesCount >= 10)
+                {
+                    await _botClient.SendTextMessageAsync(
+                        chatId,
+                        "Вы достигли лимита: максимум 10 классов на одного администратора.",
+                        cancellationToken: cancellationToken);
+                    _userStates.TryRemove(user.TelegramUserId, out _);
+                    return;
+                }
+
+                var newClass = new Class
+                {
+                    Name = classNameCreate,
+                    AdminTelegramUserId = user.TelegramUserId,
+                    CreatedAt = DateTime.UtcNow
+                };
+
+                _dbContext.Classes.Add(newClass);
+
+                user.Role = UserRole.Admin;
+                user.IsVerified = true;
+                await _dbContext.SaveChangesAsync(); // получить Id
+
+                user.ClassId = newClass.Id;
+                user.Class = newClass;
+                await _dbContext.SaveChangesAsync();
+
+                _userStates.TryRemove(user.TelegramUserId, out _);
+
+                await _botClient.SendTextMessageAsync(
+                    chatId,
+                    $"Класс '{classNameCreate}' успешно создан! Вы назначены администратором этого класса.",
+                    cancellationToken: cancellationToken);
+                break;
+
+            case VerificationStep.WaitingForClassNameRequest:
+                if (string.IsNullOrWhiteSpace(message.Text))
+                {
+                    await _botClient.SendTextMessageAsync(chatId, "Введите название класса.", cancellationToken: cancellationToken);
+                    return;
+                }
+
+                var classNameRequest = message.Text.Trim();
+                var targetClass = await _dbContext.Classes
+                    .FirstOrDefaultAsync(c => c.Name == classNameRequest, cancellationToken);
+
+                if (targetClass == null)
+                {
+                    await _botClient.SendTextMessageAsync(
+                        chatId,
+                        "Класс с таким названием не найден. Проверьте написание или попросите администратора создать класс.",
+                        cancellationToken: cancellationToken);
+                    return;
+                }
+
+                var existingVerification = await _dbContext.ParentVerifications
+                    .AnyAsync(v =>
+                        v.TelegramUserId == user.TelegramUserId &&
+                        v.ClassId == targetClass.Id &&
+                        v.Status == VerificationStatus.Pending,
+                        cancellationToken);
+
+                if (existingVerification)
+                {
+                    await _botClient.SendTextMessageAsync(
+                        chatId,
+                        "Заявка на этот класс уже отправлена и находится в ожидании.",
+                        cancellationToken: cancellationToken);
+                    _userStates.TryRemove(user.TelegramUserId, out _);
+                    return;
+                }
+
+                var verificationRequest = new ParentVerification
+                {
+                    TelegramUserId = user.TelegramUserId,
+                    FullName = user.FullName!,
+                    PhoneNumber = user.PhoneNumber!,
+                    Status = VerificationStatus.Pending,
+                    ClassId = targetClass.Id,
+                    CreatedAt = DateTime.UtcNow
+                };
+
+                _dbContext.ParentVerifications.Add(verificationRequest);
+                await _dbContext.SaveChangesAsync();
+
+                _userStates.TryRemove(user.TelegramUserId, out _);
+
+                await NotifyAdminsAboutNewVerification(verificationRequest);
+
+                await _botClient.SendTextMessageAsync(
+                    chatId,
+                    $"Заявка отправлена админу класса '{targetClass.Name}'. Ожидайте подтверждения.",
+                    cancellationToken: cancellationToken);
+                break;
         }
     }
 
@@ -648,67 +875,78 @@ public class UpdateHandler
             cancellationToken: cancellationToken);
     }
 
-    private async Task HandleViewNewsCommand(AppUser user, Message message, CancellationToken cancellationToken)
+    private async Task HandleViewNewsCommand(AppUser user, string[] parts, Message message, CancellationToken cancellationToken)
     {
         var chatId = message.Chat.Id;
 
-        // Собираем все классы пользователя (из основного ClassId и из связей ParentClassLinks)
-        var classIds = new List<int>();
-        if (user.ClassId.HasValue)
-            classIds.Add(user.ClassId.Value);
-
-        var linkClassIds = await _dbContext.ParentClassLinks
-            .Where(l => l.UserId == user.Id)
-            .Select(l => l.ClassId)
-            .ToListAsync(cancellationToken);
-        classIds.AddRange(linkClassIds);
-        classIds = classIds.Distinct().ToList();
-
-        if (!classIds.Any())
+        if (parts.Length < 2)
         {
-            await _botClient.SendTextMessageAsync(
-                chatId,
-                "Вы не привязаны ни к одному классу.",
-                cancellationToken: cancellationToken);
+            await _botClient.SendTextMessageAsync(chatId, "Использование: /viewnews <Название класса>", cancellationToken: cancellationToken);
             return;
         }
 
-        var news = await _dbContext.News
-            .Where(n => classIds.Contains(n.ClassId))
-            .OrderByDescending(n => n.CreatedAt)
-            .Take(10)
-            .ToListAsync(cancellationToken);
+        var className = string.Join(" ", parts.Skip(1));
+        var targetClass = await _dbContext.Classes
+            .FirstOrDefaultAsync(c => c.Name == className, cancellationToken);
 
-        if (!news.Any())
+        if (targetClass == null)
         {
-            await _botClient.SendTextMessageAsync(
-                chatId,
-                "Пока нет новостей или отчетов.",
-                cancellationToken: cancellationToken);
+            await _botClient.SendTextMessageAsync(chatId, "Класс не найден.", cancellationToken: cancellationToken);
             return;
         }
 
-        // Получаем имена классов для отображения
-        var classNames = await _dbContext.Classes
-            .Where(c => classIds.Contains(c.Id))
-            .ToDictionaryAsync(c => c.Id, c => c.Name, cancellationToken);
+        // Проверка доступа: админ/модератор этого класса или родитель, привязанный к нему
+        var hasAccess = (user.Role == UserRole.Admin && targetClass.AdminTelegramUserId == user.TelegramUserId)
+                        || (user.Role == UserRole.Moderator && user.ClassId == targetClass.Id)
+                        || (user.Role == UserRole.Parent && user.IsVerified && (
+                            user.ClassId == targetClass.Id ||
+                            await _dbContext.ParentClassLinks.AnyAsync(l => l.UserId == user.Id && l.ClassId == targetClass.Id, cancellationToken)
+                        ));
 
-        foreach (var item in news)
+        if (!hasAccess)
         {
-            var typeText = item.Type == NewsType.News ? "📰 Новость" : "📊 Отчет";
-            var className = classNames.TryGetValue(item.ClassId, out var name) ? name : "Неизвестно";
-            var text = $"{typeText}\n\n" +
-                      $"Класс: {className}\n\n" +
-                      $"<b>{item.Title}</b>\n\n" +
-                      $"{item.Content}\n\n" +
-                      $"Дата: {item.CreatedAt:dd.MM.yyyy HH:mm}";
-
-            await _botClient.SendTextMessageAsync(
-                chatId,
-                text,
-                parseMode: ParseMode.Html,
-                cancellationToken: cancellationToken);
+            await _botClient.SendTextMessageAsync(chatId, "У вас нет доступа к новостям этого класса.", cancellationToken: cancellationToken);
+            return;
         }
+
+        // Пагинация: страницы по 5 записей, до 10 страниц
+        const int pageSize = 5;
+        const int maxPages = 10;
+        var newsQuery = _dbContext.News
+            .Where(n => n.ClassId == targetClass.Id)
+            .OrderByDescending(n => n.CreatedAt);
+
+        var totalCount = await newsQuery.CountAsync(cancellationToken);
+        var page = (int)Math.Ceiling(totalCount / (double)pageSize);
+        page = Math.Min(page, maxPages);
+
+        if (page == 0)
+        {
+            await _botClient.SendTextMessageAsync(chatId, "Пока нет новостей или отчетов.", cancellationToken: cancellationToken);
+            return;
+        }
+
+        // Формируем одну страницу (первую)
+        var news = await newsQuery
+            .Take(pageSize)
+            .ToListAsync(cancellationToken);
+
+        var startIdx = (page - 1) * pageSize;
+        var pageText = string.Join("\n\n", news.Select((item, idx) =>
+        {
+            var localDate = item.CreatedAt.AddHours(3);
+            var content = (item.Content ?? string.Empty).TrimEnd();
+            return $"<b>{startIdx + idx + 1}. {item.Title}</b>\n\n{content}\n\nДата: {localDate:dd.MM.yyyy HH:mm}";
+        }));
+
+        var keyboard = BuildNewsPaginationKeyboard(targetClass.Id, 1, page);
+
+        await _botClient.SendTextMessageAsync(
+            chatId,
+            pageText,
+            parseMode: ParseMode.Html,
+            replyMarkup: keyboard,
+            cancellationToken: cancellationToken);
     }
 
     private async Task HandleVerificationsCommand(AppUser user, string[] parts, Message message, CancellationToken cancellationToken)
@@ -836,6 +1074,22 @@ public class UpdateHandler
                     await _botClient.AnswerCallbackQueryAsync(callbackQuery.Id, "Ошибка состояния", cancellationToken: cancellationToken);
                 }
             }
+            else if (data.StartsWith("news_prev_") || data.StartsWith("news_next_"))
+            {
+                var partsCb = data.Split('_', StringSplitOptions.RemoveEmptyEntries);
+                // format: news_prev_{classId}_{currentPage} or news_next_{classId}_{currentPage}
+                if (partsCb.Length == 4 &&
+                    int.TryParse(partsCb[2], out var classId) &&
+                    int.TryParse(partsCb[3], out var currentPage))
+                {
+                    var direction = partsCb[1] == "prev" ? -1 : 1;
+                    var nextPage = currentPage + direction;
+                    var messageId = callbackQuery.Message?.MessageId ?? 0;
+                    await SendNewsPage(callbackQuery.Message!.Chat.Id, messageId, userId, classId, nextPage, cancellationToken);
+                }
+
+                await _botClient.AnswerCallbackQueryAsync(callbackQuery.Id, cancellationToken: cancellationToken);
+            }
             else
             {
                 await _botClient.AnswerCallbackQueryAsync(callbackQuery.Id, cancellationToken: cancellationToken);
@@ -869,8 +1123,9 @@ public class UpdateHandler
             .ToListAsync();
 
         var localDate = news.CreatedAt.AddHours(3); // UTC +3
+        var content = (news.Content ?? string.Empty).TrimEnd();
         var message = $"<b>{news.Title}</b>\n\n" +
-                     $"{news.Content}\n\n" +
+                     $"{content}\n\n" +
                      $"Дата: {localDate:dd.MM.yyyy HH:mm}";
 
         foreach (var tgId in recipients)
@@ -1356,6 +1611,7 @@ public class UserState
     public NewsType? NewsType { get; set; }
     public string? NewsTitle { get; set; }
     public string? NewsContent { get; set; }
+    public ClassAction ClassAction { get; set; } = ClassAction.None;
 }
 
 public enum VerificationStep
@@ -1364,6 +1620,14 @@ public enum VerificationStep
     WaitingForPhoneNumber,
     WaitingForNewsType,
     WaitingForNewsTitle,
-    WaitingForNewsContent
+    WaitingForNewsContent,
+    WaitingForClassNameCreate,
+    WaitingForClassNameRequest
 }
 
+public enum ClassAction
+{
+    None,
+    CreateClass,
+    RequestClass
+}
