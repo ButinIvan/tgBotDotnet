@@ -2,10 +2,10 @@ using Telegram.Bot;
 using Telegram.Bot.Polling;
 using Telegram.Bot.Types;
 using Telegram.Bot.Types.Enums;
-using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Logging;
 using dotnetTgBot.Models;
 using dotnetTgBot.Persistence;
+using dotnetTgBot.Interfaces;
 using Microsoft.EntityFrameworkCore;
 
 namespace dotnetTgBot.Services;
@@ -17,11 +17,11 @@ public class TelegramBotService : BackgroundService
     private readonly ILogger<TelegramBotService> _logger;
 
     public TelegramBotService(
-        IOptions<TelegramBotOptions> options,
+        ITelegramBotClient botClient,
         IServiceProvider serviceProvider,
         ILogger<TelegramBotService> logger)
     {
-        _botClient = new TelegramBotClient(options.Value.BotToken);
+        _botClient = botClient;
         _serviceProvider = serviceProvider;
         _logger = logger;
     }
@@ -54,7 +54,9 @@ public class TelegramBotService : BackgroundService
             var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
             var loggerFactory = scope.ServiceProvider.GetRequiredService<ILoggerFactory>();
             var handlerLogger = loggerFactory.CreateLogger<UpdateHandler>();
-            var handler = new UpdateHandler(botClient, dbContext, handlerLogger);
+            var newsQueueProducer = scope.ServiceProvider.GetRequiredService<INewsQueueProducer>();
+            var s3 = scope.ServiceProvider.GetRequiredService<IS3Repository>();
+            var handler = new UpdateHandler(botClient, dbContext, handlerLogger, newsQueueProducer, s3);
 
             await handler.HandleUpdate(update, cancellationToken);
         }

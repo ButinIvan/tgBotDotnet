@@ -9,6 +9,8 @@ public class News
     public string Title { get; set; } = string.Empty;
     public string Content { get; set; } = string.Empty;
     public NewsType Type { get; set; }
+    public string? FilePath { get; set; }
+    public string? FileName { get; set; }
     public DateTime CreatedAt { get; set; }
 }
 

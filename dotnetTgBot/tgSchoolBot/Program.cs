@@ -3,6 +3,9 @@ using Microsoft.AspNetCore.Authentication.Cookies;
 using Telegram.Bot;
 using dotnetTgBot.Persistence;
 using dotnetTgBot.Services;
+using RabbitMQ.Client;
+using dotnetTgBot.Interfaces;
+using System.Threading;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -42,6 +45,49 @@ builder.Services.AddSingleton<ITelegramBotClient>(sp =>
 {
     var token = envService.GetVariable("TELEGRAM_BOT_TOKEN");
     return new Telegram.Bot.TelegramBotClient(token);
+});
+
+// Register RabbitMQ connection
+builder.Services.AddSingleton<IConnection>(sp =>
+{
+    var uri = envService.GetVariable("RABBITMQ_CONNECTION");
+    var factory = new ConnectionFactory
+    {
+        Uri = new Uri(uri),
+        DispatchConsumersAsync = true
+    };
+
+    var retries = 10;
+    var delay = TimeSpan.FromSeconds(3);
+    for (int i = 0; i < retries; i++)
+    {
+        try
+        {
+            return factory.CreateConnection();
+        }
+        catch (Exception ex) when (i < retries - 1)
+        {
+            Thread.Sleep(delay);
+        }
+    }
+
+    // Final attempt (will throw if fails)
+    return factory.CreateConnection();
+});
+
+// Register RabbitMQ service (queue declaration)
+builder.Services.AddSingleton<IRabbitMqService, RabbitMqService>();
+builder.Services.AddSingleton<INewsQueueProducer, NewsQueueProducer>();
+builder.Services.AddHostedService<NewsQueueConsumer>();
+
+// Minio / S3
+builder.Services.AddSingleton<IS3Repository>(sp =>
+{
+    var endpoint = envService.GetVariable("MINIO_ENDPOINT", "minio:9000");
+    var accessKey = envService.GetVariable("MINIO_ACCESS_KEY");
+    var secretKey = envService.GetVariable("MINIO_SECRET_KEY");
+    var publicEndpoint = envService.GetVariable("MINIO_PUBLIC_ENDPOINT", "minio:9000");
+    return new MinioService(endpoint, accessKey, secretKey, publicEndpoint);
 });
 
 // Register Telegram Bot Service as background service
@@ -89,7 +135,7 @@ using (var scope = app.Services.CreateScope())
             }
             else
             {
-                logger.LogWarning("Database connection attempt {Attempt} failed, retrying in {Delay} seconds...", i + 1, retryDelay.TotalSeconds);
+                logger.LogWarning(ex, "Database connection attempt {Attempt} failed, retrying in {Delay} seconds...", i + 1, retryDelay.TotalSeconds);
                 Thread.Sleep(retryDelay);
             }
         }

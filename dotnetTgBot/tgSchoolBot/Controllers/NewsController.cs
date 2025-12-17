@@ -2,10 +2,10 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Mvc.Rendering;
-using Telegram.Bot;
 using dotnetTgBot.Models;
 using dotnetTgBot.Persistence;
 using dotnetTgBot.Services;
+using dotnetTgBot.Interfaces;
 
 namespace dotnetTgBot.Controllers;
 
@@ -14,13 +14,15 @@ public class NewsController : Controller
 {
     private readonly ApplicationDbContext _context;
     private readonly ILogger<NewsController> _logger;
-    private readonly ITelegramBotClient _botClient;
+    private readonly INewsQueueProducer _newsQueueProducer;
+    private readonly IS3Repository _s3Repository;
 
-    public NewsController(ApplicationDbContext context, ILogger<NewsController> logger, ITelegramBotClient botClient)
+    public NewsController(ApplicationDbContext context, ILogger<NewsController> logger, INewsQueueProducer newsQueueProducer, IS3Repository s3Repository)
     {
         _context = context;
         _logger = logger;
-        _botClient = botClient;
+        _newsQueueProducer = newsQueueProducer;
+        _s3Repository = s3Repository;
     }
 
     [HttpGet]
@@ -51,7 +53,7 @@ public class NewsController : Controller
 
     [HttpPost]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> Create(News news)
+    public async Task<IActionResult> Create(News news, IFormFile? reportFile)
     {
         var telegramUserId = long.Parse(User.Identity!.Name!);
         var user = await _context.Users
@@ -60,6 +62,13 @@ public class NewsController : Controller
         if (user == null || (user.Role != UserRole.Admin && user.Role != UserRole.Moderator))
         {
             return RedirectToAction("Login", "Account");
+        }
+
+        if (news.Type == NewsType.Report)
+        {
+            // Для отчета контент не обязателен
+            ModelState.Remove(nameof(News.Content));
+            news.Content = string.Empty;
         }
 
         if (ModelState.IsValid)
@@ -76,14 +85,38 @@ public class NewsController : Controller
                 news.AuthorTelegramUserId = user.TelegramUserId;
                 news.CreatedAt = DateTime.UtcNow;
 
-                _context.News.Add(news);
-                await _context.SaveChangesAsync();
+                if (news.Type == NewsType.Report)
+                {
+                    if (reportFile == null || reportFile.Length == 0)
+                    {
+                        ModelState.AddModelError(string.Empty, "Загрузите файл отчета.");
+                    }
+                    else
+                    {
+                        var objectName = $"{news.ClassId}/{Guid.NewGuid()}_{reportFile.FileName}";
+                        using var stream = reportFile.OpenReadStream();
+                        await _s3Repository.UploadFileAsync(objectName, stream, reportFile.ContentType ?? "application/octet-stream", reportFile.Length);
 
-                // Уведомляем родителей о новой новости
-                await NotifyParentsAboutNewNews(news);
+                        news.FilePath = objectName;
+                        news.FileName = reportFile.FileName;
 
-                TempData["Success"] = "Новость успешно создана и отправлена родителям!";
-                return RedirectToAction("Index", "Home");
+                        _context.News.Add(news);
+                        await _context.SaveChangesAsync();
+
+                        TempData["Success"] = "Отчет сохранен. Его можно скачать через бота командой /viewreports.";
+                        return RedirectToAction("Index", "Home");
+                    }
+                }
+                else
+                {
+                    _context.News.Add(news);
+                    await _context.SaveChangesAsync();
+
+                    await _newsQueueProducer.EnqueueNewsAsync(news);
+
+                    TempData["Success"] = "Новость успешно создана и поставлена в очередь на отправку!";
+                    return RedirectToAction("Index", "Home");
+                }
             }
         }
 
@@ -219,50 +252,5 @@ public class NewsController : Controller
         return RedirectToAction("Index", "Home");
     }
 
-    private async Task NotifyParentsAboutNewNews(News news)
-    {
-        // Получаем родителей по прямой привязке и через ParentClassLinks
-        var parentIdsFromLinks = await _context.ParentClassLinks
-            .Where(l => l.ClassId == news.ClassId)
-            .Select(l => l.UserId)
-            .ToListAsync();
-
-        var recipients = await _context.Users
-            .Where(u =>
-                (
-                    (u.Role == UserRole.Parent && u.IsVerified &&
-                     (u.ClassId == news.ClassId || parentIdsFromLinks.Contains(u.Id)))
-                    || (u.Role == UserRole.Admin && u.ClassId == news.ClassId)
-                    || (u.Role == UserRole.Moderator && u.ClassId == news.ClassId)
-                ))
-            .ToListAsync();
-
-        // Исключаем дубликаты по TelegramUserId
-        var recipientIds = recipients
-            .Select(u => u.TelegramUserId)
-            .Distinct()
-            .ToList();
-
-        var localDate = news.CreatedAt.AddHours(3); // UTC +3
-        var message = $"<b>{news.Title}</b>\n\n" +
-                     $"{news.Content}\n\n" +
-                     $"Дата: {localDate:dd.MM.yyyy HH:mm}";
-
-        foreach (var tgId in recipientIds)
-        {
-            try
-            {
-                await _botClient.SendTextMessageAsync(
-                    tgId,
-                    message,
-                    parseMode: Telegram.Bot.Types.Enums.ParseMode.Html,
-                    cancellationToken: CancellationToken.None);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, $"Не удалось отправить новость пользователю {tgId}");
-            }
-        }
-    }
 }
 

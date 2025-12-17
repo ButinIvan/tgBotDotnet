@@ -5,7 +5,7 @@
 
 <h2>Создать новость или отчет</h2>
 
-<form method="post" action="/News/Create">
+<form method="post" action="/News/Create" enctype="multipart/form-data">
     @Html.AntiForgeryToken()
 
     <div class="mb-3">
@@ -15,20 +15,36 @@
     
     <div class="mb-3">
         <label for="Type" class="form-label">Тип</label>
+        @{
+            var selectedType = Model?.Type ?? NewsType.News;
+        }
         <select class="form-select" id="Type" name="Type" required>
-            <option value="News">📰 Новость</option>
-            <option value="Report">📊 Отчет</option>
+            @if (selectedType == NewsType.News)
+            {
+                <option value="News" selected>📰 Новость</option>
+                <option value="Report">📊 Отчет</option>
+            }
+            else
+            {
+                <option value="News">📰 Новость</option>
+                <option value="Report" selected>📊 Отчет</option>
+            }
         </select>
     </div>
 
     <div class="mb-3">
         <label for="Title" class="form-label">Заголовок</label>
-        <input type="text" class="form-control" id="Title" name="Title" required>
+        <input type="text" class="form-control" id="Title" name="Title" value="@Model?.Title" required>
     </div>
 
-    <div class="mb-3">
+    <div class="mb-3" id="content-block">
         <label for="Content" class="form-label">Содержание</label>
-        <textarea class="form-control" id="Content" name="Content" rows="10" required></textarea>
+        <textarea class="form-control" id="Content" name="Content" rows="10">@Model?.Content</textarea>
+    </div>
+
+    <div class="mb-3" id="report-file-block" style="display:@(Model?.Type == NewsType.Report ? "block" : "none")">
+        <label for="reportFile" class="form-label">Файл отчета</label>
+        <input type="file" class="form-control" id="reportFile" name="reportFile" accept="*/*">
     </div>
 
     <div class="d-flex gap-2">
@@ -36,4 +52,25 @@
         <a href="/Home" class="btn btn-secondary">Отмена</a>
     </div>
 </form>
+
+<script>
+    (function() {
+        const typeSelect = document.getElementById('Type');
+        const fileBlock = document.getElementById('report-file-block');
+        const contentBlock = document.getElementById('content-block');
+        const contentInput = document.getElementById('Content');
+        const fileInput = document.getElementById('reportFile');
+        function toggleFile() {
+            const isReport = typeSelect.value === 'Report';
+            fileBlock.style.display = isReport ? 'block' : 'none';
+            contentBlock.style.display = isReport ? 'none' : 'block';
+            // content не обязателен для отчета
+            contentInput.required = !isReport;
+            // файл обязателен для отчета
+            fileInput.required = isReport;
+        }
+        typeSelect.addEventListener('change', toggleFile);
+        toggleFile();
+    })();
+</script>
 

@@ -110,6 +110,12 @@ public class ModeratorsController : Controller
             return RedirectToAction("Index");
         }
 
+        if (targetUser.Role == UserRole.Moderator)
+        {
+            TempData["Error"] = "Пользователь уже является модератором";
+            return RedirectToAction("Index");
+        }
+
         targetUser.Role = UserRole.Moderator;
         targetUser.IsVerified = true;
         await _context.SaveChangesAsync();
