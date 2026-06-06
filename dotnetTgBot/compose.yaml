@@ -1,6 +1,6 @@
 ﻿services:
   db:
-    image: postgres:latest
+    image: postgres:16-alpine
     container_name: postgres
     restart: always
     environment:
@@ -41,7 +41,7 @@
       - "5010:5010"
     environment:
       - CONNECTION_STRING=Host=db;Port=5432;Database=${DB_NAME};Username=${DB_USERNAME};Password=${DB_PASSWORD}
-      - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_ENVIRONMENT=Production
       - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
       - RABBITMQ_CONNECTION=amqp://${RABBITMQ_USER}:${RABBITMQ_PASSWORD}@rabbitmq:5672/
       - RABBITMQ_QUEUE=${RABBITMQ_QUEUE:-tg_bot_queue}
