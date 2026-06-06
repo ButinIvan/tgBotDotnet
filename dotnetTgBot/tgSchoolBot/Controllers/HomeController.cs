@@ -29,8 +29,8 @@ public class HomeController : Controller
             return RedirectToAction("Login", "Account");
         }
 
-        int? currentClassId;
         List<Class> classes;
+        Class? currentClass;
 
         if (user.Role == UserRole.Admin)
         {
@@ -38,28 +38,34 @@ public class HomeController : Controller
                 .Where(c => c.AdminTelegramUserId == telegramUserId)
                 .OrderBy(c => c.Name)
                 .ToListAsync();
-            currentClassId = classId ?? classes.FirstOrDefault()?.Id;
+
+            currentClass = classId.HasValue
+                ? classes.FirstOrDefault(c => c.Id == classId.Value)
+                : classes.FirstOrDefault();
         }
         else
         {
-            classes = new List<Class>();
-            currentClassId = user.ClassId;
-        }
+            currentClass = user.ClassId.HasValue
+                ? await _context.Classes.FirstOrDefaultAsync(c => c.Id == user.ClassId.Value)
+                : null;
 
-        if (currentClassId == null)
-        {
-            return RedirectToAction("Index", "Home");
+            classes = currentClass == null
+                ? new List<Class>()
+                : new List<Class> { currentClass };
         }
 
         ViewBag.User = user;
         ViewBag.Classes = classes;
-        ViewBag.SelectedClassId = currentClassId;
-
-        var currentClass = await _context.Classes.FirstOrDefaultAsync(c => c.Id == currentClassId);
+        ViewBag.SelectedClassId = currentClass?.Id;
         ViewBag.Class = currentClass;
 
+        if (currentClass == null)
+        {
+            return View(new List<News>());
+        }
+
         var news = await _context.News
-            .Where(n => n.ClassId == currentClassId)
+            .Where(n => n.ClassId == currentClass.Id)
             .OrderByDescending(n => n.CreatedAt)
             .Take(10)
             .ToListAsync();
