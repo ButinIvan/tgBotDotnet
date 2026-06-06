@@ -6,7 +6,6 @@ using Telegram.Bot.Types.Enums;
 using Microsoft.EntityFrameworkCore;
 using dotnetTgBot.Models;
 using dotnetTgBot.Interfaces;
-using Telegram.Bot.Types;
 using BotUser = Telegram.Bot.Types.User;
 using AppUser = dotnetTgBot.Models.User;
 

@@ -48,7 +48,7 @@ builder.Services.Configure<TelegramBotOptions>(options =>
 builder.Services.AddSingleton<ITelegramBotClient>(sp =>
 {
     var token = envService.GetVariable("TELEGRAM_BOT_TOKEN");
-    return new Telegram.Bot.TelegramBotClient(token);
+    return new TelegramBotClient(token);
 });
 
 // Register RabbitMQ connection
@@ -69,13 +69,13 @@ builder.Services.AddSingleton<IConnection>(sp =>
         {
             return factory.CreateConnection();
         }
-        catch (Exception ex) when (i < retries - 1)
+        catch (Exception) when (i < retries - 1)
         {
             Thread.Sleep(delay);
         }
     }
 
-    // Final attempt (will throw if fails)
+    // Final attempt will throw if RabbitMQ is still unavailable.
     return factory.CreateConnection();
 });
 
@@ -99,34 +99,23 @@ builder.Services.AddHostedService<TelegramBotService>();
 
 var app = builder.Build();
 
-// Ensure database is created and migrated
+// Apply migrations before the app starts handling requests.
 using (var scope = app.Services.CreateScope())
 {
     var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
     var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
-    
+
     var maxRetries = 10;
     var retryDelay = TimeSpan.FromSeconds(3);
-    
+
     for (int i = 0; i < maxRetries; i++)
     {
         try
         {
             if (dbContext.Database.CanConnect())
             {
-                // Пытаемся применить миграции
-                try
-                {
-                    dbContext.Database.Migrate();
-                    logger.LogInformation("Database migrated successfully");
-                }
-                catch (Exception migrateEx)
-                {
-                    // Если миграций нет или они не работают, создаем базу через EnsureCreated
-                    logger.LogWarning(migrateEx, "Migration failed (this is normal if no migrations exist), trying EnsureCreated...");
-                    dbContext.Database.EnsureCreated();
-                    logger.LogInformation("Database created successfully using EnsureCreated");
-                }
+                dbContext.Database.Migrate();
+                logger.LogInformation("Database migrated successfully");
                 break;
             }
         }
@@ -137,11 +126,9 @@ using (var scope = app.Services.CreateScope())
                 logger.LogError(ex, "Failed to connect to database after {MaxRetries} attempts", maxRetries);
                 throw;
             }
-            else
-            {
-                logger.LogWarning(ex, "Database connection attempt {Attempt} failed, retrying in {Delay} seconds...", i + 1, retryDelay.TotalSeconds);
-                Thread.Sleep(retryDelay);
-            }
+
+            logger.LogWarning(ex, "Database connection attempt {Attempt} failed, retrying in {Delay} seconds...", i + 1, retryDelay.TotalSeconds);
+            Thread.Sleep(retryDelay);
         }
     }
 }
