@@ -12,12 +12,32 @@ namespace dotnetTgBot.Controllers;
 [Authorize]
 public class NewsController : Controller
 {
+    private const long MaxReportFileSizeBytes = 10 * 1024 * 1024;
+
+    private static readonly HashSet<string> AllowedReportExtensions = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ".pdf",
+        ".doc",
+        ".docx",
+        ".xls",
+        ".xlsx",
+        ".ppt",
+        ".pptx",
+        ".jpg",
+        ".jpeg",
+        ".png"
+    };
+
     private readonly ApplicationDbContext _context;
     private readonly ILogger<NewsController> _logger;
     private readonly INewsQueueProducer _newsQueueProducer;
     private readonly IS3Repository _s3Repository;
 
-    public NewsController(ApplicationDbContext context, ILogger<NewsController> logger, INewsQueueProducer newsQueueProducer, IS3Repository s3Repository)
+    public NewsController(
+        ApplicationDbContext context,
+        ILogger<NewsController> logger,
+        INewsQueueProducer newsQueueProducer,
+        IS3Repository s3Repository)
     {
         _context = context;
         _logger = logger;
@@ -37,17 +57,14 @@ public class NewsController : Controller
             return RedirectToAction("Login", "Account");
         }
 
-        var classes = await _context.Classes
-            .Where(c => c.AdminTelegramUserId == telegramUserId)
-            .OrderBy(c => c.Name)
-            .ToListAsync();
+        var classes = await GetOwnedClasses(telegramUserId);
 
         if (!classes.Any())
         {
             return RedirectToAction("Index", "Home");
         }
 
-        ViewBag.Classes = classes.Select(c => new SelectListItem { Value = c.Id.ToString(), Text = c.Name }).ToList();
+        ViewBag.Classes = BuildClassSelectList(classes);
         return View();
     }
 
@@ -66,7 +83,6 @@ public class NewsController : Controller
 
         if (news.Type == NewsType.Report)
         {
-            // Для отчета контент не обязателен
             ModelState.Remove(nameof(News.Content));
             news.Content = string.Empty;
         }
@@ -87,18 +103,26 @@ public class NewsController : Controller
 
                 if (news.Type == NewsType.Report)
                 {
-                    if (reportFile == null || reportFile.Length == 0)
+                    var validationError = ValidateReportFile(reportFile);
+                    if (validationError != null)
                     {
-                        ModelState.AddModelError(string.Empty, "Загрузите файл отчета.");
+                        ModelState.AddModelError(string.Empty, validationError);
                     }
                     else
                     {
-                        var objectName = $"{news.ClassId}/{Guid.NewGuid()}_{reportFile.FileName}";
+                        var safeFileName = GetSafeFileName(reportFile!.FileName);
+                        var extension = Path.GetExtension(safeFileName);
+                        var objectName = $"{news.ClassId}/{Guid.NewGuid():N}{extension}";
+
                         using var stream = reportFile.OpenReadStream();
-                        await _s3Repository.UploadFileAsync(objectName, stream, reportFile.ContentType ?? "application/octet-stream", reportFile.Length);
+                        await _s3Repository.UploadFileAsync(
+                            objectName,
+                            stream,
+                            reportFile.ContentType ?? "application/octet-stream",
+                            reportFile.Length);
 
                         news.FilePath = objectName;
-                        news.FileName = reportFile.FileName;
+                        news.FileName = safeFileName;
 
                         _context.News.Add(news);
                         await _context.SaveChangesAsync();
@@ -114,17 +138,14 @@ public class NewsController : Controller
 
                     await _newsQueueProducer.EnqueueNewsAsync(news);
 
-                    TempData["Success"] = "Новость успешно создана и поставлена в очередь на отправку!";
+                    TempData["Success"] = "Новость успешно создана и поставлена в очередь на отправку.";
                     return RedirectToAction("Index", "Home");
                 }
             }
         }
 
-        var classes = await _context.Classes
-            .Where(c => c.AdminTelegramUserId == telegramUserId)
-            .OrderBy(c => c.Name)
-            .ToListAsync();
-        ViewBag.Classes = classes.Select(c => new SelectListItem { Value = c.Id.ToString(), Text = c.Name }).ToList();
+        var classes = await GetOwnedClasses(telegramUserId);
+        ViewBag.Classes = BuildClassSelectList(classes);
         return View(news);
     }
 
@@ -140,11 +161,7 @@ public class NewsController : Controller
             return RedirectToAction("Login", "Account");
         }
 
-        var ownedClasses = await _context.Classes
-            .Where(c => c.AdminTelegramUserId == telegramUserId)
-            .OrderBy(c => c.Name)
-            .ToListAsync();
-
+        var ownedClasses = await GetOwnedClasses(telegramUserId);
         var ownedClassIds = ownedClasses.Select(c => c.Id).ToHashSet();
 
         var news = await _context.News
@@ -155,9 +172,7 @@ public class NewsController : Controller
             return NotFound();
         }
 
-        ViewBag.Classes = ownedClasses
-            .Select(c => new SelectListItem { Value = c.Id.ToString(), Text = c.Name, Selected = c.Id == news.ClassId })
-            .ToList();
+        ViewBag.Classes = BuildClassSelectList(ownedClasses, news.ClassId);
         return View(news);
     }
 
@@ -179,10 +194,7 @@ public class NewsController : Controller
             return NotFound();
         }
 
-        var ownedClasses = await _context.Classes
-            .Where(c => c.AdminTelegramUserId == telegramUserId)
-            .OrderBy(c => c.Name)
-            .ToListAsync();
+        var ownedClasses = await GetOwnedClasses(telegramUserId);
         var ownedClassIds = ownedClasses.Select(c => c.Id).ToHashSet();
 
         var existingNews = await _context.News
@@ -204,21 +216,17 @@ public class NewsController : Controller
             }
             else
             {
-            existingNews.Title = news.Title;
-            existingNews.Content = news.Content;
-            existingNews.Type = news.Type;
-            existingNews.ClassId = news.ClassId;
+                existingNews.Title = news.Title;
+                existingNews.Content = news.Content;
+                existingNews.Type = news.Type;
+                existingNews.ClassId = news.ClassId;
 
-            await _context.SaveChangesAsync();
-            return RedirectToAction("Index", "Home");
-        }
+                await _context.SaveChangesAsync();
+                return RedirectToAction("Index", "Home");
+            }
         }
 
-        var classes = await _context.Classes
-            .Where(c => c.AdminTelegramUserId == telegramUserId)
-            .OrderBy(c => c.Name)
-            .ToListAsync();
-        ViewBag.Classes = classes.Select(c => new SelectListItem { Value = c.Id.ToString(), Text = c.Name, Selected = c.Id == news.ClassId }).ToList();
+        ViewBag.Classes = BuildClassSelectList(ownedClasses, news.ClassId);
         return View(news);
     }
 
@@ -252,5 +260,61 @@ public class NewsController : Controller
         return RedirectToAction("Index", "Home");
     }
 
-}
+    private async Task<List<Class>> GetOwnedClasses(long telegramUserId)
+    {
+        return await _context.Classes
+            .Where(c => c.AdminTelegramUserId == telegramUserId)
+            .OrderBy(c => c.Name)
+            .ToListAsync();
+    }
 
+    private static List<SelectListItem> BuildClassSelectList(IEnumerable<Class> classes, int? selectedClassId = null)
+    {
+        return classes
+            .Select(c => new SelectListItem
+            {
+                Value = c.Id.ToString(),
+                Text = c.Name,
+                Selected = selectedClassId == c.Id
+            })
+            .ToList();
+    }
+
+    private static string? ValidateReportFile(IFormFile? file)
+    {
+        if (file == null || file.Length == 0)
+        {
+            return "Загрузите файл отчета.";
+        }
+
+        if (file.Length > MaxReportFileSizeBytes)
+        {
+            return "Файл отчета не должен быть больше 10 МБ.";
+        }
+
+        var fileName = Path.GetFileName(file.FileName);
+        if (string.IsNullOrWhiteSpace(fileName))
+        {
+            return "Некорректное имя файла отчета.";
+        }
+
+        var extension = Path.GetExtension(fileName);
+        if (!AllowedReportExtensions.Contains(extension))
+        {
+            return "Разрешены только PDF, Office-документы и изображения JPG/PNG.";
+        }
+
+        return null;
+    }
+
+    private static string GetSafeFileName(string fileName)
+    {
+        var safeName = Path.GetFileName(fileName);
+        foreach (var invalidChar in Path.GetInvalidFileNameChars())
+        {
+            safeName = safeName.Replace(invalidChar, '_');
+        }
+
+        return safeName;
+    }
+}

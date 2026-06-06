@@ -7,6 +7,7 @@
 
 <form method="post" action="/News/Create" enctype="multipart/form-data">
     @Html.AntiForgeryToken()
+    @Html.ValidationSummary(true, "", new { @class = "alert alert-danger" })
 
     <div class="mb-3">
         <label for="ClassId" class="form-label">Класс</label>
@@ -44,7 +45,7 @@
 
     <div class="mb-3" id="report-file-block" style="display:@(Model?.Type == NewsType.Report ? "block" : "none")">
         <label for="reportFile" class="form-label">Файл отчета</label>
-        <input type="file" class="form-control" id="reportFile" name="reportFile" accept="*/*">
+        <input type="file" class="form-control" id="reportFile" name="reportFile" accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.jpg,.jpeg,.png">
     </div>
 
     <div class="d-flex gap-2">
