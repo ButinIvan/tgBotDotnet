@@ -41,11 +41,14 @@ public class NewsQueueProducer : INewsQueueProducer
 
                 lock (_lock)
                 {
+                    var properties = _rabbit.Channel.CreateBasicProperties();
+                    properties.Persistent = true;
+
                     _rabbit.Channel.BasicPublish(
                         exchange: string.Empty,
                         routingKey: _rabbit.QueueName,
                         mandatory: false,
-                        basicProperties: null,
+                        basicProperties: properties,
                         body: body);
                 }
             }

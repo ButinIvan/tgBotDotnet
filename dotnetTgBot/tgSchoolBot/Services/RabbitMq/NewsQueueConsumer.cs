@@ -56,7 +56,15 @@ public class NewsQueueConsumer : BackgroundService
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error processing news queue message");
-                _rabbit.Channel.BasicAck(ea.DeliveryTag, multiple: false);
+                if (ea.Redelivered)
+                {
+                    _logger.LogError("News queue message failed after retry and will be rejected. DeliveryTag: {DeliveryTag}", ea.DeliveryTag);
+                    _rabbit.Channel.BasicReject(ea.DeliveryTag, requeue: false);
+                }
+                else
+                {
+                    _rabbit.Channel.BasicNack(ea.DeliveryTag, multiple: false, requeue: true);
+                }
             }
         };
 
