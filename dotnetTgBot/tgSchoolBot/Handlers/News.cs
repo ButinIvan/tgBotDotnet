@@ -1,4 +1,4 @@
-﻿using Telegram.Bot;
+using Telegram.Bot;
 using Telegram.Bot.Types;
 using System.IO;
 using Telegram.Bot.Types.ReplyMarkups;
@@ -17,7 +17,7 @@ public partial class UpdateHandler
     {
         var chatId = message.Chat.Id;
 
-        // РЎРѕР±РёСЂР°РµРј РєР»Р°СЃСЃС‹, РіРґРµ РїРѕР»СЊР·РѕРІР°С‚РµР»СЊ Р°РґРјРёРЅ РёР»Рё РјРѕРґРµСЂР°С‚РѕСЂ
+        // Собираем классы, где пользователь админ или модератор
         var adminClasses = await _dbContext.Classes
             .Where(c => c.AdminTelegramUserId == user.TelegramUserId)
             .Select(c => new { c.Id, c.Name })
@@ -48,7 +48,7 @@ public partial class UpdateHandler
         {
             await _botClient.SendTextMessageAsync(
                 chatId,
-                "РЈ РІР°СЃ РЅРµС‚ РєР»Р°СЃСЃРѕРІ РґР»СЏ РїСѓР±Р»РёРєР°С†РёРё (РЅСѓР¶РЅРѕ Р±С‹С‚СЊ Р°РґРјРёРЅРѕРј РёР»Рё РјРѕРґРµСЂР°С‚РѕСЂРѕРј).",
+                "У вас нет классов для публикации (нужно быть админом или модератором).",
                 cancellationToken: cancellationToken);
             return;
         }
@@ -69,7 +69,7 @@ public partial class UpdateHandler
 
         var msg = await _botClient.SendTextMessageAsync(
             chatId,
-            "Р’С‹Р±РµСЂРёС‚Рµ РєР»Р°СЃСЃ РґР»СЏ РїСѓР±Р»РёРєР°С†РёРё:",
+            "Выберите класс для публикации:",
             replyMarkup: keyboard,
             cancellationToken: cancellationToken);
 
@@ -105,7 +105,7 @@ public partial class UpdateHandler
 
         if (!classIds.Any())
         {
-            await _botClient.SendTextMessageAsync(chatId, "РЈ РІР°СЃ РЅРµС‚ РґРѕСЃС‚СѓРїРЅС‹С… РєР»Р°СЃСЃРѕРІ РґР»СЏ РїСЂРѕСЃРјРѕС‚СЂР° РЅРѕРІРѕСЃС‚РµР№.", cancellationToken: cancellationToken);
+            await _botClient.SendTextMessageAsync(chatId, "У вас нет доступных классов для просмотра новостей.", cancellationToken: cancellationToken);
             return;
         }
 
@@ -122,7 +122,7 @@ public partial class UpdateHandler
 
         var msg = await _botClient.SendTextMessageAsync(
             chatId,
-            "Р’С‹Р±РµСЂРёС‚Рµ РєР»Р°СЃСЃ РґР»СЏ РїСЂРѕСЃРјРѕС‚СЂР° РЅРѕРІРѕСЃС‚РµР№:",
+            "Выберите класс для просмотра новостей:",
             replyMarkup: new InlineKeyboardMarkup(buttons),
             cancellationToken: cancellationToken);
 
@@ -158,7 +158,7 @@ public partial class UpdateHandler
 
         if (!classIds.Any())
         {
-            await _botClient.SendTextMessageAsync(chatId, "РЈ РІР°СЃ РЅРµС‚ РґРѕСЃС‚СѓРїРЅС‹С… РєР»Р°СЃСЃРѕРІ РґР»СЏ РїСЂРѕСЃРјРѕС‚СЂР° РѕС‚С‡РµС‚РѕРІ.", cancellationToken: cancellationToken);
+            await _botClient.SendTextMessageAsync(chatId, "У вас нет доступных классов для просмотра отчетов.", cancellationToken: cancellationToken);
             return;
         }
 
@@ -175,7 +175,7 @@ public partial class UpdateHandler
 
         var msg = await _botClient.SendTextMessageAsync(
             chatId,
-            "Р’С‹Р±РµСЂРёС‚Рµ РєР»Р°СЃСЃ РґР»СЏ РїСЂРѕСЃРјРѕС‚СЂР° РѕС‚С‡РµС‚РѕРІ:",
+            "Выберите класс для просмотра отчетов:",
             replyMarkup: new InlineKeyboardMarkup(buttons),
             cancellationToken: cancellationToken);
 
@@ -189,7 +189,7 @@ public partial class UpdateHandler
 
         if (parts.Length < 2)
         {
-            await _botClient.SendTextMessageAsync(chatId, "РСЃРїРѕР»СЊР·РѕРІР°РЅРёРµ: /viewnews <РќР°Р·РІР°РЅРёРµ РєР»Р°СЃСЃР°>", cancellationToken: cancellationToken);
+            await _botClient.SendTextMessageAsync(chatId, "Использование: /viewnews <Название класса>", cancellationToken: cancellationToken);
             return;
         }
 
@@ -199,7 +199,7 @@ public partial class UpdateHandler
 
         if (targetClass == null)
         {
-            await _botClient.SendTextMessageAsync(chatId, "РљР»Р°СЃСЃ РЅРµ РЅР°Р№РґРµРЅ.", cancellationToken: cancellationToken);
+            await _botClient.SendTextMessageAsync(chatId, "Класс не найден.", cancellationToken: cancellationToken);
             return;
         }
 
@@ -212,7 +212,7 @@ public partial class UpdateHandler
 
         if (!hasAccess)
         {
-            await _botClient.SendTextMessageAsync(chatId, "РЈ РІР°СЃ РЅРµС‚ РґРѕСЃС‚СѓРїР° Рє РЅРѕРІРѕСЃС‚СЏРј СЌС‚РѕРіРѕ РєР»Р°СЃСЃР°.", cancellationToken: cancellationToken);
+            await _botClient.SendTextMessageAsync(chatId, "У вас нет доступа к новостям этого класса.", cancellationToken: cancellationToken);
             return;
         }
 
@@ -228,7 +228,7 @@ public partial class UpdateHandler
 
         if (pages == 0)
         {
-            await _botClient.SendTextMessageAsync(chatId, "РџРѕРєР° РЅРµС‚ РЅРѕРІРѕСЃС‚РµР№ РёР»Рё РѕС‚С‡РµС‚РѕРІ.", cancellationToken: cancellationToken);
+            await _botClient.SendTextMessageAsync(chatId, "Пока нет новостей или отчетов.", cancellationToken: cancellationToken);
             return;
         }
 
@@ -260,7 +260,7 @@ public partial class UpdateHandler
 
         if (parts.Length < 2)
         {
-            await _botClient.SendTextMessageAsync(chatId, "РСЃРїРѕР»СЊР·РѕРІР°РЅРёРµ: /viewreports <РќР°Р·РІР°РЅРёРµ РєР»Р°СЃСЃР°>", cancellationToken: cancellationToken);
+            await _botClient.SendTextMessageAsync(chatId, "Использование: /viewreports <Название класса>", cancellationToken: cancellationToken);
             return;
         }
 
@@ -270,7 +270,7 @@ public partial class UpdateHandler
 
         if (targetClass == null)
         {
-            await _botClient.SendTextMessageAsync(chatId, "РљР»Р°СЃСЃ РЅРµ РЅР°Р№РґРµРЅ.", cancellationToken: cancellationToken);
+            await _botClient.SendTextMessageAsync(chatId, "Класс не найден.", cancellationToken: cancellationToken);
             return;
         }
 
@@ -283,7 +283,7 @@ public partial class UpdateHandler
 
         if (!hasAccess)
         {
-            await _botClient.SendTextMessageAsync(chatId, "РЈ РІР°СЃ РЅРµС‚ РґРѕСЃС‚СѓРїР° Рє РѕС‚С‡РµС‚Р°Рј СЌС‚РѕРіРѕ РєР»Р°СЃСЃР°.", cancellationToken: cancellationToken);
+            await _botClient.SendTextMessageAsync(chatId, "У вас нет доступа к отчетам этого класса.", cancellationToken: cancellationToken);
             return;
         }
 
@@ -297,9 +297,9 @@ public partial class UpdateHandler
         var buttons = new List<InlineKeyboardButton>();
 
         if (currentPage > 1)
-            buttons.Add(InlineKeyboardButton.WithCallbackData("В« РџСЂРµРґ", $"news_prev_{classId}_{currentPage}"));
+            buttons.Add(InlineKeyboardButton.WithCallbackData("« Пред", $"news_prev_{classId}_{currentPage}"));
         if (currentPage < totalPages)
-            buttons.Add(InlineKeyboardButton.WithCallbackData("РЎР»РµРґ В»", $"news_next_{classId}_{currentPage}"));
+            buttons.Add(InlineKeyboardButton.WithCallbackData("След »", $"news_next_{classId}_{currentPage}"));
 
         return new InlineKeyboardMarkup(buttons);
     }
@@ -320,7 +320,7 @@ public partial class UpdateHandler
                         ));
         if (!hasAccess)
         {
-            await _botClient.SendTextMessageAsync(chatId, "РЈ РІР°СЃ РЅРµС‚ РґРѕСЃС‚СѓРїР° Рє РЅРѕРІРѕСЃС‚СЏРј СЌС‚РѕРіРѕ РєР»Р°СЃСЃР°.", cancellationToken: cancellationToken);
+            await _botClient.SendTextMessageAsync(chatId, "У вас нет доступа к новостям этого класса.", cancellationToken: cancellationToken);
             return;
         }
 
@@ -334,7 +334,7 @@ public partial class UpdateHandler
 
         if (totalPages == 0)
         {
-            await _botClient.SendTextMessageAsync(chatId, "РџРѕРєР° РЅРµС‚ РЅРѕРІРѕСЃС‚РµР№ РёР»Рё РѕС‚С‡РµС‚РѕРІ.", cancellationToken: cancellationToken);
+            await _botClient.SendTextMessageAsync(chatId, "Пока нет новостей или отчетов.", cancellationToken: cancellationToken);
             return;
         }
 
@@ -389,13 +389,13 @@ public partial class UpdateHandler
         {
             buttons.Add(new List<InlineKeyboardButton>
             {
-                InlineKeyboardButton.WithCallbackData($"в¬‡пёЏ {r.Title}", $"report_dl_{r.Id}")
+                InlineKeyboardButton.WithCallbackData($"⬇️ {r.Title}", $"report_dl_{r.Id}")
             });
         }
 
         var nav = new List<InlineKeyboardButton>();
-        if (page > 1) nav.Add(InlineKeyboardButton.WithCallbackData("В« РџСЂРµРґ", $"reports_prev_{classId}_{page}"));
-        if (page < totalPages) nav.Add(InlineKeyboardButton.WithCallbackData("РЎР»РµРґ В»", $"reports_next_{classId}_{page}"));
+        if (page > 1) nav.Add(InlineKeyboardButton.WithCallbackData("« Пред", $"reports_prev_{classId}_{page}"));
+        if (page < totalPages) nav.Add(InlineKeyboardButton.WithCallbackData("След »", $"reports_next_{classId}_{page}"));
         if (nav.Any()) buttons.Add(nav);
 
         return new InlineKeyboardMarkup(buttons);
@@ -417,7 +417,7 @@ public partial class UpdateHandler
                         ));
         if (!hasAccess)
         {
-            await _botClient.SendTextMessageAsync(chatId, "РЈ РІР°СЃ РЅРµС‚ РґРѕСЃС‚СѓРїР° Рє РѕС‚С‡РµС‚Р°Рј СЌС‚РѕРіРѕ РєР»Р°СЃСЃР°.", cancellationToken: cancellationToken);
+            await _botClient.SendTextMessageAsync(chatId, "У вас нет доступа к отчетам этого класса.", cancellationToken: cancellationToken);
             return;
         }
 
@@ -428,7 +428,7 @@ public partial class UpdateHandler
         var total = await query.CountAsync(cancellationToken);
         if (total == 0)
         {
-            await _botClient.SendTextMessageAsync(chatId, "РћС‚С‡РµС‚С‹ РѕС‚СЃСѓС‚СЃС‚РІСѓСЋС‚.", cancellationToken: cancellationToken);
+            await _botClient.SendTextMessageAsync(chatId, "Отчеты отсутствуют.", cancellationToken: cancellationToken);
             return;
         }
 

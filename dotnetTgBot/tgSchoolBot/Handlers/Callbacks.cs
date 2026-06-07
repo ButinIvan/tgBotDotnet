@@ -1,4 +1,4 @@
-﻿using Telegram.Bot;
+using Telegram.Bot;
 using Telegram.Bot.Types;
 using Telegram.Bot.Types.ReplyMarkups;
 using Microsoft.EntityFrameworkCore;
@@ -42,7 +42,7 @@ public partial class UpdateHandler
 
                     await HandleApproveVerification(verificationId, classId, userId, chatId, cancellationToken);
                 }
-                await _botClient.AnswerCallbackQueryAsync(callbackQuery.Id, "РћРґРѕР±СЂРµРЅРѕ", cancellationToken: cancellationToken);
+                await _botClient.AnswerCallbackQueryAsync(callbackQuery.Id, "Одобрено", cancellationToken: cancellationToken);
             }
             else if (data.StartsWith("reject_"))
             {
@@ -51,11 +51,11 @@ public partial class UpdateHandler
                 {
                     await HandleRejectVerification(verificationId, userId, chatId, cancellationToken);
                 }
-                await _botClient.AnswerCallbackQueryAsync(callbackQuery.Id, "РћС‚РєР»РѕРЅРµРЅРѕ", cancellationToken: cancellationToken);
+                await _botClient.AnswerCallbackQueryAsync(callbackQuery.Id, "Отклонено", cancellationToken: cancellationToken);
             }
             else if (data == "news_type_news" || data == "news_type_report")
             {
-                await _botClient.AnswerCallbackQueryAsync(callbackQuery.Id, "РўРёРї РїСѓР±Р»РёРєР°С†РёРё РЅРµ С‚СЂРµР±СѓРµС‚СЃСЏ. РСЃРїРѕР»СЊР·СѓР№С‚Рµ /createnews Р·Р°РЅРѕРІРѕ.", cancellationToken: cancellationToken);
+                await _botClient.AnswerCallbackQueryAsync(callbackQuery.Id, "Тип публикации не требуется. Используйте /createnews заново.", cancellationToken: cancellationToken);
             }
             else if (data.StartsWith("news_class_"))
             {
@@ -70,14 +70,14 @@ public partial class UpdateHandler
                 var parts = data.Split('_', StringSplitOptions.RemoveEmptyEntries);
                 if (parts.Length == 3 && int.TryParse(parts[2], out var classId))
                 {
-                        // РџСЂРѕРІРµСЂРєР°, С‡С‚Рѕ РїРѕР»СЊР·РѕРІР°С‚РµР»СЊ РёРјРµРµС‚ РѕС‚РЅРѕС€РµРЅРёРµ Рє РєР»Р°СЃСЃСѓ (Р°РґРјРёРЅ РёР»Рё РјРѕРґРµСЂР°С‚РѕСЂ)
+                        // Проверка, что пользователь имеет отношение к классу (админ или модератор)
                         var hasAccess = await _dbContext.Classes.AnyAsync(c =>
                             c.Id == classId &&
                             (c.AdminTelegramUserId == user.TelegramUserId ||
                              (user.Role == UserRole.Moderator && user.ClassId == classId)), cancellationToken);
                         if (!hasAccess)
                         {
-                            await _botClient.AnswerCallbackQueryAsync(callbackQuery.Id, "РќРµС‚ РґРѕСЃС‚СѓРїР° Рє СЌС‚РѕРјСѓ РєР»Р°СЃСЃСѓ", cancellationToken: cancellationToken);
+                            await _botClient.AnswerCallbackQueryAsync(callbackQuery.Id, "Нет доступа к этому классу", cancellationToken: cancellationToken);
                             return;
                         }
 
@@ -91,12 +91,12 @@ public partial class UpdateHandler
 
                     await _botClient.SendTextMessageAsync(
                         chatId,
-                        "Р’РІРµРґРёС‚Рµ Р·Р°РіРѕР»РѕРІРѕРє:",
+                        "Введите заголовок:",
                         cancellationToken: cancellationToken);
                 }
                 else
                 {
-                    await _botClient.AnswerCallbackQueryAsync(callbackQuery.Id, "РћС€РёР±РєР° РІС‹Р±РѕСЂР° РєР»Р°СЃСЃР°", cancellationToken: cancellationToken);
+                    await _botClient.AnswerCallbackQueryAsync(callbackQuery.Id, "Ошибка выбора класса", cancellationToken: cancellationToken);
                 }
             }
             else if (data.StartsWith("news_prev_") || data.StartsWith("news_next_"))
@@ -126,7 +126,7 @@ public partial class UpdateHandler
                 }
                 else
                 {
-                    await _botClient.AnswerCallbackQueryAsync(callbackQuery.Id, "РћС€РёР±РєР° РІС‹Р±РѕСЂР° РєР»Р°СЃСЃР°", cancellationToken: cancellationToken);
+                    await _botClient.AnswerCallbackQueryAsync(callbackQuery.Id, "Ошибка выбора класса", cancellationToken: cancellationToken);
                 }
             }
             else if (data.StartsWith("viewreports_class_"))
@@ -141,7 +141,7 @@ public partial class UpdateHandler
                 }
                 else
                 {
-                    await _botClient.AnswerCallbackQueryAsync(callbackQuery.Id, "РћС€РёР±РєР° РІС‹Р±РѕСЂР° РєР»Р°СЃСЃР°", cancellationToken: cancellationToken);
+                    await _botClient.AnswerCallbackQueryAsync(callbackQuery.Id, "Ошибка выбора класса", cancellationToken: cancellationToken);
                 }
             }
             else if (data.StartsWith("reports_prev_") || data.StartsWith("reports_next_"))
@@ -155,7 +155,7 @@ public partial class UpdateHandler
                 }
                 else
                 {
-                    await _botClient.AnswerCallbackQueryAsync(callbackQuery.Id, "РћС€РёР±РєР° РїР°РіРёРЅР°С†РёРё", cancellationToken: cancellationToken);
+                    await _botClient.AnswerCallbackQueryAsync(callbackQuery.Id, "Ошибка пагинации", cancellationToken: cancellationToken);
                 }
             }
             else if (data.StartsWith("report_dl_"))
@@ -168,7 +168,7 @@ public partial class UpdateHandler
                     var report = await _dbContext.News.FirstOrDefaultAsync(n => n.Id == reportId && n.Type == NewsType.Report, cancellationToken);
                     if (report == null)
                     {
-                        await _botClient.SendTextMessageAsync(chatId, "РћС‚С‡РµС‚ РЅРµ РЅР°Р№РґРµРЅ.", cancellationToken: cancellationToken);
+                        await _botClient.SendTextMessageAsync(chatId, "Отчет не найден.", cancellationToken: cancellationToken);
                         return;
                     }
 
@@ -181,7 +181,7 @@ public partial class UpdateHandler
                                     ));
                     if (!hasAccess)
                     {
-                        await _botClient.SendTextMessageAsync(chatId, "РќРµС‚ РґРѕСЃС‚СѓРїР° Рє СЌС‚РѕРјСѓ РѕС‚С‡РµС‚Сѓ.", cancellationToken: cancellationToken);
+                        await _botClient.SendTextMessageAsync(chatId, "Нет доступа к этому отчету.", cancellationToken: cancellationToken);
                         return;
                     }
 
@@ -230,7 +230,7 @@ public partial class UpdateHandler
                 }
                 else
                 {
-                    await _botClient.AnswerCallbackQueryAsync(callbackQuery.Id, "РћС€РёР±РєР° СЃРєР°С‡РёРІР°РЅРёСЏ", cancellationToken: cancellationToken);
+                    await _botClient.AnswerCallbackQueryAsync(callbackQuery.Id, "Ошибка скачивания", cancellationToken: cancellationToken);
                 }
             }
             else if (data.StartsWith("delete_class_"))
@@ -244,7 +244,7 @@ public partial class UpdateHandler
                 }
                 else
                 {
-                    await _botClient.AnswerCallbackQueryAsync(callbackQuery.Id, "РћС€РёР±РєР° РІС‹Р±РѕСЂР° РєР»Р°СЃСЃР°", cancellationToken: cancellationToken);
+                    await _botClient.AnswerCallbackQueryAsync(callbackQuery.Id, "Ошибка выбора класса", cancellationToken: cancellationToken);
                 }
             }
             else if (data.StartsWith("modclass_add_") || data.StartsWith("modclass_remove_") || data.StartsWith("modclass_list_"))
@@ -266,12 +266,12 @@ public partial class UpdateHandler
                             }
                             else
                             {
-                                await _botClient.AnswerCallbackQueryAsync(callbackQuery.Id, "РЎРµСЃСЃРёСЏ СѓСЃС‚Р°СЂРµР»Р°. РќР°С‡РЅРёС‚Рµ Р·Р°РЅРѕРІРѕ.", cancellationToken: cancellationToken);
+                                await _botClient.AnswerCallbackQueryAsync(callbackQuery.Id, "Сессия устарела. Начните заново.", cancellationToken: cancellationToken);
                                 return;
                             }
                             await DeletePromptMessage(chatId, callbackQuery.Message?.MessageId, cancellationToken);
                             await _botClient.AnswerCallbackQueryAsync(callbackQuery.Id, cancellationToken: cancellationToken);
-                            await _botClient.SendTextMessageAsync(user.TelegramUserId, "Р’РІРµРґРёС‚Рµ Telegram ID РїРѕР»СЊР·РѕРІР°С‚РµР»СЏ:", cancellationToken: cancellationToken);
+                            await _botClient.SendTextMessageAsync(user.TelegramUserId, "Введите Telegram ID пользователя:", cancellationToken: cancellationToken);
                             break;
                         case "remove":
                             if (_userStates.TryGetValue(userId, out var stRem) && stRem.Step == VerificationStep.WaitingForModeratorClass)
@@ -283,12 +283,12 @@ public partial class UpdateHandler
                             }
                             else
                             {
-                                await _botClient.AnswerCallbackQueryAsync(callbackQuery.Id, "РЎРµСЃСЃРёСЏ СѓСЃС‚Р°СЂРµР»Р°. РќР°С‡РЅРёС‚Рµ Р·Р°РЅРѕРІРѕ.", cancellationToken: cancellationToken);
+                                await _botClient.AnswerCallbackQueryAsync(callbackQuery.Id, "Сессия устарела. Начните заново.", cancellationToken: cancellationToken);
                                 return;
                             }
                             await DeletePromptMessage(chatId, callbackQuery.Message?.MessageId, cancellationToken);
                             await _botClient.AnswerCallbackQueryAsync(callbackQuery.Id, cancellationToken: cancellationToken);
-                            await _botClient.SendTextMessageAsync(user.TelegramUserId, "Р’РІРµРґРёС‚Рµ Telegram ID РјРѕРґРµСЂР°С‚РѕСЂР°:", cancellationToken: cancellationToken);
+                            await _botClient.SendTextMessageAsync(user.TelegramUserId, "Введите Telegram ID модератора:", cancellationToken: cancellationToken);
                             break;
                         case "list":
                             _userStates.TryRemove(user.TelegramUserId, out _);
@@ -297,13 +297,13 @@ public partial class UpdateHandler
                             await HandleListModeratorsForClass(classId, user.TelegramUserId, cancellationToken);
                             break;
                         default:
-                            await _botClient.AnswerCallbackQueryAsync(callbackQuery.Id, "РћС€РёР±РєР°", cancellationToken: cancellationToken);
+                            await _botClient.AnswerCallbackQueryAsync(callbackQuery.Id, "Ошибка", cancellationToken: cancellationToken);
                             break;
                     }
                 }
                 else
                 {
-                    await _botClient.AnswerCallbackQueryAsync(callbackQuery.Id, "РћС€РёР±РєР° РІС‹Р±РѕСЂР° РєР»Р°СЃСЃР°", cancellationToken: cancellationToken);
+                    await _botClient.AnswerCallbackQueryAsync(callbackQuery.Id, "Ошибка выбора класса", cancellationToken: cancellationToken);
                 }
             }
             else if (data.StartsWith("parents_class_"))
@@ -319,7 +319,7 @@ public partial class UpdateHandler
                 }
                 else
                 {
-                    await _botClient.AnswerCallbackQueryAsync(callbackQuery.Id, "РћС€РёР±РєР° РІС‹Р±РѕСЂР° РєР»Р°СЃСЃР°", cancellationToken: cancellationToken);
+                    await _botClient.AnswerCallbackQueryAsync(callbackQuery.Id, "Ошибка выбора класса", cancellationToken: cancellationToken);
                 }
             }
             else if (data.StartsWith("verif_class_"))
@@ -335,7 +335,7 @@ public partial class UpdateHandler
                 }
                 else
                 {
-                    await _botClient.AnswerCallbackQueryAsync(callbackQuery.Id, "РћС€РёР±РєР° РІС‹Р±РѕСЂР° РєР»Р°СЃСЃР°", cancellationToken: cancellationToken);
+                    await _botClient.AnswerCallbackQueryAsync(callbackQuery.Id, "Ошибка выбора класса", cancellationToken: cancellationToken);
                 }
             }
             else
@@ -345,8 +345,8 @@ public partial class UpdateHandler
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "РћС€РёР±РєР° РїСЂРё РѕР±СЂР°Р±РѕС‚РєРµ callback");
-            await _botClient.AnswerCallbackQueryAsync(callbackQuery.Id, "РџСЂРѕРёР·РѕС€Р»Р° РѕС€РёР±РєР°", cancellationToken: cancellationToken);
+            _logger.LogError(ex, "Ошибка при обработке callback");
+            await _botClient.AnswerCallbackQueryAsync(callbackQuery.Id, "Произошла ошибка", cancellationToken: cancellationToken);
         }
     }
 }

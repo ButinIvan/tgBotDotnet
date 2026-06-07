@@ -1,4 +1,4 @@
-﻿using Telegram.Bot.Types;
+using Telegram.Bot.Types;
 using Telegram.Bot;
 using Telegram.Bot.Types.ReplyMarkups;
 using Microsoft.EntityFrameworkCore;
@@ -19,7 +19,7 @@ public partial class UpdateHandler
 
         if (!classes.Any())
         {
-            await _botClient.SendTextMessageAsync(chatId, "РЈ РІР°СЃ РЅРµС‚ РєР»Р°СЃСЃРѕРІ РґР»СЏ РІРµСЂРёС„РёРєР°С†РёР№.", cancellationToken: cancellationToken);
+            await _botClient.SendTextMessageAsync(chatId, "У вас нет классов для верификаций.", cancellationToken: cancellationToken);
             return;
         }
 
@@ -37,7 +37,7 @@ public partial class UpdateHandler
 
         var msg = await _botClient.SendTextMessageAsync(
             chatId,
-            "Р’С‹Р±РµСЂРёС‚Рµ РєР»Р°СЃСЃ РґР»СЏ РїСЂРѕСЃРјРѕС‚СЂР° Р·Р°СЏРІРѕРє:",
+            "Выберите класс для просмотра заявок:",
             replyMarkup: new InlineKeyboardMarkup(buttons),
             cancellationToken: cancellationToken);
 
@@ -52,7 +52,7 @@ public partial class UpdateHandler
 
         if (targetClass == null)
         {
-            await _botClient.SendTextMessageAsync(chatId, "РљР»Р°СЃСЃ РЅРµ РЅР°Р№РґРµРЅ РёР»Рё РІС‹ РЅРµ Р°РґРјРёРЅ СЌС‚РѕРіРѕ РєР»Р°СЃСЃР°.", cancellationToken: cancellationToken);
+            await _botClient.SendTextMessageAsync(chatId, "Класс не найден или вы не админ этого класса.", cancellationToken: cancellationToken);
             return;
         }
 
@@ -65,7 +65,7 @@ public partial class UpdateHandler
         {
             await _botClient.SendTextMessageAsync(
                 chatId,
-                "РќРµС‚ Р·Р°СЏРІРѕРє РЅР° РІРµСЂРёС„РёРєР°С†РёСЋ.",
+                "Нет заявок на верификацию.",
                 cancellationToken: cancellationToken);
             return;
         }
@@ -76,15 +76,15 @@ public partial class UpdateHandler
             {
                 new[]
                 {
-                    InlineKeyboardButton.WithCallbackData("вњ… РћРґРѕР±СЂРёС‚СЊ", $"approve_{verification.Id}_{classId}"),
-                    InlineKeyboardButton.WithCallbackData("вќЊ РћС‚РєР»РѕРЅРёС‚СЊ", $"reject_{verification.Id}")
+                    InlineKeyboardButton.WithCallbackData("✅ Одобрить", $"approve_{verification.Id}_{classId}"),
+                    InlineKeyboardButton.WithCallbackData("❌ Отклонить", $"reject_{verification.Id}")
                 }
             });
 
-            var text = $"Р—Р°СЏРІРєР° #{verification.Id}\n\n" +
-                      $"Р¤РРћ: {verification.FullName}\n" +
-                      $"РўРµР»РµС„РѕРЅ: {verification.PhoneNumber}\n" +
-                      $"Р”Р°С‚Р°: {AppDateTime.Format(verification.CreatedAt)}";
+            var text = $"Заявка #{verification.Id}\n\n" +
+                      $"ФИО: {verification.FullName}\n" +
+                      $"Телефон: {verification.PhoneNumber}\n" +
+                      $"Дата: {AppDateTime.Format(verification.CreatedAt)}";
 
             await _botClient.SendTextMessageAsync(
                 chatId,
@@ -99,7 +99,7 @@ public partial class UpdateHandler
         var admin = await _dbContext.Users.FirstOrDefaultAsync(u => u.TelegramUserId == adminUserId, cancellationToken);
         if (admin == null || (admin.Role != UserRole.Admin && admin.Role != UserRole.Moderator))
         {
-            await _botClient.SendTextMessageAsync(chatId, "РЈ РІР°СЃ РЅРµС‚ РїСЂР°РІ РґР»СЏ СЌС‚РѕРіРѕ РґРµР№СЃС‚РІРёСЏ.", cancellationToken: cancellationToken);
+            await _botClient.SendTextMessageAsync(chatId, "У вас нет прав для этого действия.", cancellationToken: cancellationToken);
             return;
         }
 
@@ -108,7 +108,7 @@ public partial class UpdateHandler
 
         if (verification == null || verification.Status != VerificationStatus.Pending)
         {
-            await _botClient.SendTextMessageAsync(chatId, "Р—Р°СЏРІРєР° РЅРµ РЅР°Р№РґРµРЅР° РёР»Рё СѓР¶Рµ РѕР±СЂР°Р±РѕС‚Р°РЅР°.", cancellationToken: cancellationToken);
+            await _botClient.SendTextMessageAsync(chatId, "Заявка не найдена или уже обработана.", cancellationToken: cancellationToken);
             return;
         }
 
@@ -116,7 +116,7 @@ public partial class UpdateHandler
 
         if (targetClassId == null)
         {
-            await _botClient.SendTextMessageAsync(chatId, "РЎРЅР°С‡Р°Р»Р° СЃРѕР·РґР°Р№С‚Рµ РєР»Р°СЃСЃ.", cancellationToken: cancellationToken);
+            await _botClient.SendTextMessageAsync(chatId, "Сначала создайте класс.", cancellationToken: cancellationToken);
             return;
         }
 
@@ -125,7 +125,7 @@ public partial class UpdateHandler
 
         if (adminClass == null)
         {
-            await _botClient.SendTextMessageAsync(chatId, "РљР»Р°СЃСЃ РЅРµ РЅР°Р№РґРµРЅ.", cancellationToken: cancellationToken);
+            await _botClient.SendTextMessageAsync(chatId, "Класс не найден.", cancellationToken: cancellationToken);
             return;
         }
 
@@ -162,17 +162,17 @@ public partial class UpdateHandler
         {
             await _botClient.SendTextMessageAsync(
                 verification.TelegramUserId,
-                $"вњ… Р’Р°С€Р° Р·Р°СЏРІРєР° РѕРґРѕР±СЂРµРЅР°! Р’С‹ РїРѕР»СѓС‡РёР»Рё РґРѕСЃС‚СѓРї Рє РєР»Р°СЃСЃСѓ '{adminClass.Name}'.",
+                $"✅ Ваша заявка одобрена! Вы получили доступ к классу '{adminClass.Name}'.",
                 cancellationToken: cancellationToken);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "РќРµ СѓРґР°Р»РѕСЃСЊ СѓРІРµРґРѕРјРёС‚СЊ СЂРѕРґРёС‚РµР»СЏ");
+            _logger.LogError(ex, "Не удалось уведомить родителя");
         }
 
         await _botClient.SendTextMessageAsync(
             chatId,
-            $"Р—Р°СЏРІРєР° #{verificationId} РѕРґРѕР±СЂРµРЅР°. Р РѕРґРёС‚РµР»СЊ РїРѕР»СѓС‡РёР» РґРѕСЃС‚СѓРї Рє РєР»Р°СЃСЃСѓ '{adminClass.Name}'.",
+            $"Заявка #{verificationId} одобрена. Родитель получил доступ к классу '{adminClass.Name}'.",
             cancellationToken: cancellationToken);
     }
 
@@ -181,7 +181,7 @@ public partial class UpdateHandler
         var admin = await _dbContext.Users.FirstOrDefaultAsync(u => u.TelegramUserId == adminUserId, cancellationToken);
         if (admin == null || (admin.Role != UserRole.Admin && admin.Role != UserRole.Moderator))
         {
-            await _botClient.SendTextMessageAsync(chatId, "РЈ РІР°СЃ РЅРµС‚ РїСЂР°РІ РґР»СЏ СЌС‚РѕРіРѕ РґРµР№СЃС‚РІРёСЏ.", cancellationToken: cancellationToken);
+            await _botClient.SendTextMessageAsync(chatId, "У вас нет прав для этого действия.", cancellationToken: cancellationToken);
             return;
         }
 
@@ -190,7 +190,7 @@ public partial class UpdateHandler
 
         if (verification == null || verification.Status != VerificationStatus.Pending)
         {
-            await _botClient.SendTextMessageAsync(chatId, "Р—Р°СЏРІРєР° РЅРµ РЅР°Р№РґРµРЅР° РёР»Рё СѓР¶Рµ РѕР±СЂР°Р±РѕС‚Р°РЅР°.", cancellationToken: cancellationToken);
+            await _botClient.SendTextMessageAsync(chatId, "Заявка не найдена или уже обработана.", cancellationToken: cancellationToken);
             return;
         }
 
@@ -204,17 +204,17 @@ public partial class UpdateHandler
         {
             await _botClient.SendTextMessageAsync(
                 verification.TelegramUserId,
-                "вќЊ Р’Р°С€Р° Р·Р°СЏРІРєР° РЅР° РІРµСЂРёС„РёРєР°С†РёСЋ Р±С‹Р»Р° РѕС‚РєР»РѕРЅРµРЅР°. РћР±СЂР°С‚РёС‚РµСЃСЊ Рє Р°РґРјРёРЅРёСЃС‚СЂР°С‚РѕСЂСѓ РґР»СЏ СѓС‚РѕС‡РЅРµРЅРёСЏ.",
+                "❌ Ваша заявка на верификацию была отклонена. Обратитесь к администратору для уточнения.",
                 cancellationToken: cancellationToken);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "РќРµ СѓРґР°Р»РѕСЃСЊ СѓРІРµРґРѕРјРёС‚СЊ СЂРѕРґРёС‚РµР»СЏ");
+            _logger.LogError(ex, "Не удалось уведомить родителя");
         }
 
         await _botClient.SendTextMessageAsync(
             chatId,
-            $"Р—Р°СЏРІРєР° #{verificationId} РѕС‚РєР»РѕРЅРµРЅР°.",
+            $"Заявка #{verificationId} отклонена.",
             cancellationToken: cancellationToken);
     }
 
@@ -224,11 +224,11 @@ public partial class UpdateHandler
             .Where(u => u.Role == UserRole.Admin || u.Role == UserRole.Moderator)
             .ToListAsync();
 
-        var message = $"РќРѕРІР°СЏ Р·Р°СЏРІРєР° РЅР° РІРµСЂРёС„РёРєР°С†РёСЋ СЂРѕРґРёС‚РµР»СЏ:\n\n" +
-                     $"Р¤РРћ: {verification.FullName}\n" +
-                     $"РўРµР»РµС„РѕРЅ: {verification.PhoneNumber}\n" +
-                     $"ID Р·Р°СЏРІРєРё: {verification.Id}\n\n" +
-                     $"РСЃРїРѕР»СЊР·СѓР№С‚Рµ /verifications РґР»СЏ РїСЂРѕСЃРјРѕС‚СЂР° РІСЃРµС… Р·Р°СЏРІРѕРє РёР»Рё РѕС‚РєСЂРѕР№С‚Рµ РІРµР±-Р°РґРјРёРЅ-РїР°РЅРµР»СЊ.";
+        var message = $"Новая заявка на верификацию родителя:\n\n" +
+                     $"ФИО: {verification.FullName}\n" +
+                     $"Телефон: {verification.PhoneNumber}\n" +
+                     $"ID заявки: {verification.Id}\n\n" +
+                     $"Используйте /verifications для просмотра всех заявок или откройте веб-админ-панель.";
 
         foreach (var admin in adminsAndModerators)
         {
@@ -241,7 +241,7 @@ public partial class UpdateHandler
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, $"РќРµ СѓРґР°Р»РѕСЃСЊ РѕС‚РїСЂР°РІРёС‚СЊ СѓРІРµРґРѕРјР»РµРЅРёРµ Р°РґРјРёРЅСѓ/РјРѕРґРµСЂР°С‚РѕСЂСѓ {admin.TelegramUserId}");
+                _logger.LogError(ex, $"Не удалось отправить уведомление админу/модератору {admin.TelegramUserId}");
             }
         }
     }
