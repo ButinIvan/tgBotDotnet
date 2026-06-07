@@ -21,137 +21,150 @@ public class ModeratorsController : Controller
     [HttpGet]
     public async Task<IActionResult> Index(int? classId)
     {
-        var telegramUserId = long.Parse(User.Identity!.Name!);
-        var user = await _context.Users
-            .FirstOrDefaultAsync(u => u.TelegramUserId == telegramUserId);
-
+        var user = await GetCurrentUser();
         if (user == null || (user.Role != UserRole.Admin && user.Role != UserRole.Moderator))
         {
             return RedirectToAction("Login", "Account");
         }
 
-        int? currentClassId;
-        List<Class> classes;
+        var classes = await GetManageableClasses(user);
+        var currentClass = GetCurrentClass(classes, classId);
 
-        if (user.Role == UserRole.Admin)
+        if (currentClass == null)
         {
-            classes = await _context.Classes
-                .Where(c => c.AdminTelegramUserId == telegramUserId)
-                .OrderBy(c => c.Name)
-                .ToListAsync();
-            currentClassId = classId ?? classes.FirstOrDefault()?.Id;
-        }
-        else
-        {
-            classes = new List<Class>();
-            currentClassId = user.ClassId;
-        }
-
-        if (currentClassId == null)
-        {
-            return RedirectToAction("Index", "Home");
+            ViewBag.IsAdmin = user.Role == UserRole.Admin;
+            ViewBag.Classes = classes;
+            ViewBag.SelectedClassId = null;
+            return View(new List<User>());
         }
 
         var moderators = await _context.Users
-            .Where(u => u.ClassId == currentClassId && u.Role == UserRole.Moderator)
+            .Where(u => u.ClassId == currentClass.Id && u.Role == UserRole.Moderator)
+            .OrderBy(u => u.FullName ?? u.FirstName ?? u.Username)
             .ToListAsync();
 
         ViewBag.IsAdmin = user.Role == UserRole.Admin;
         ViewBag.Classes = classes;
-        ViewBag.SelectedClassId = currentClassId;
+        ViewBag.SelectedClassId = currentClass.Id;
 
         return View(moderators);
     }
 
     [HttpPost]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> AddModerator(string telegramUserId)
+    public async Task<IActionResult> AddModerator(string telegramUserId, int selectedClassId)
     {
-        var currentUserId = long.Parse(User.Identity!.Name!);
-        var currentUser = await _context.Users
-            .FirstOrDefaultAsync(u => u.TelegramUserId == currentUserId);
-
-        if (currentUser == null || (currentUser.Role != UserRole.Admin && currentUser.Role != UserRole.Moderator))
+        var currentUser = await GetCurrentUser();
+        if (currentUser == null || currentUser.Role != UserRole.Admin || !await CanManageClass(currentUser, selectedClassId))
         {
-            return RedirectToAction("Login", "Account");
+            TempData["Error"] = "Только администратор класса может добавлять модераторов.";
+            return RedirectToAction("Index", new { classId = selectedClassId });
         }
-
-        var classId = currentUser.Role == UserRole.Admin
-            ? (int.TryParse(Request.Form["SelectedClassId"], out var parsedId) ? parsedId : (int?)null)
-            : currentUser.ClassId;
-
-        if (classId == null)
-            return RedirectToAction("Index", "Home");
 
         if (!long.TryParse(telegramUserId, out var userId))
         {
-            TempData["Error"] = "Неверный Telegram User ID";
-            return RedirectToAction("Index");
+            TempData["Error"] = "Неверный Telegram User ID.";
+            return RedirectToAction("Index", new { classId = selectedClassId });
         }
 
-        var targetUser = await _context.Users
-            .FirstOrDefaultAsync(u => u.TelegramUserId == userId);
-
+        var targetUser = await _context.Users.FirstOrDefaultAsync(u => u.TelegramUserId == userId);
         if (targetUser == null)
         {
-            TempData["Error"] = "Пользователь не найден";
-            return RedirectToAction("Index");
+            TempData["Error"] = "Пользователь не найден.";
+            return RedirectToAction("Index", new { classId = selectedClassId });
         }
 
         if (targetUser.Role == UserRole.Admin)
         {
-            TempData["Error"] = "Нельзя изменить роль администратора";
-            return RedirectToAction("Index");
+            TempData["Error"] = "Нельзя изменить роль администратора.";
+            return RedirectToAction("Index", new { classId = selectedClassId });
         }
 
-        if (targetUser.ClassId != classId)
+        var belongsToClass = targetUser.ClassId == selectedClassId ||
+            await _context.ParentClassLinks.AnyAsync(l => l.UserId == targetUser.Id && l.ClassId == selectedClassId);
+
+        if (!belongsToClass)
         {
-            TempData["Error"] = "Пользователь не принадлежит вашему классу";
-            return RedirectToAction("Index");
+            TempData["Error"] = "Пользователь не принадлежит выбранному классу.";
+            return RedirectToAction("Index", new { classId = selectedClassId });
         }
 
-        if (targetUser.Role == UserRole.Moderator)
+        if (targetUser.Role == UserRole.Moderator && targetUser.ClassId == selectedClassId)
         {
-            TempData["Error"] = "Пользователь уже является модератором";
-            return RedirectToAction("Index");
+            TempData["Error"] = "Пользователь уже является модератором этого класса.";
+            return RedirectToAction("Index", new { classId = selectedClassId });
         }
 
         targetUser.Role = UserRole.Moderator;
         targetUser.IsVerified = true;
+        targetUser.ClassId = selectedClassId;
         await _context.SaveChangesAsync();
 
-        TempData["Success"] = "Модератор успешно добавлен";
-        return RedirectToAction("Index");
+        TempData["Success"] = "Модератор успешно добавлен.";
+        return RedirectToAction("Index", new { classId = selectedClassId });
     }
 
     [HttpPost]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> RemoveModerator(int id)
+    public async Task<IActionResult> RemoveModerator(long id, int selectedClassId)
     {
-        var currentUserId = long.Parse(User.Identity!.Name!);
-        var currentUser = await _context.Users
-            .FirstOrDefaultAsync(u => u.TelegramUserId == currentUserId);
-
-        if (currentUser == null || currentUser.Role != UserRole.Admin)
+        var currentUser = await GetCurrentUser();
+        if (currentUser == null || currentUser.Role != UserRole.Admin || !await CanManageClass(currentUser, selectedClassId))
         {
-            TempData["Error"] = "Только администратор может удалять модераторов";
-            return RedirectToAction("Index");
+            TempData["Error"] = "Только администратор класса может удалять модераторов.";
+            return RedirectToAction("Index", new { classId = selectedClassId });
         }
 
         var moderator = await _context.Users
-            .FirstOrDefaultAsync(u => u.Id == id && u.ClassId == currentUser.ClassId);
+            .FirstOrDefaultAsync(u => u.Id == id && u.ClassId == selectedClassId);
 
         if (moderator == null || moderator.Role != UserRole.Moderator)
         {
-            TempData["Error"] = "Модератор не найден";
-            return RedirectToAction("Index");
+            TempData["Error"] = "Модератор не найден.";
+            return RedirectToAction("Index", new { classId = selectedClassId });
         }
 
         moderator.Role = UserRole.Parent;
         await _context.SaveChangesAsync();
 
-        TempData["Success"] = "Права модератора успешно удалены";
-        return RedirectToAction("Index");
+        TempData["Success"] = "Права модератора удалены.";
+        return RedirectToAction("Index", new { classId = selectedClassId });
+    }
+
+    private async Task<User?> GetCurrentUser()
+    {
+        var telegramUserId = long.Parse(User.Identity!.Name!);
+        return await _context.Users.FirstOrDefaultAsync(u => u.TelegramUserId == telegramUserId);
+    }
+
+    private async Task<List<Class>> GetManageableClasses(User user)
+    {
+        var classes = await _context.Classes
+            .Where(c => c.AdminTelegramUserId == user.TelegramUserId)
+            .OrderBy(c => c.Name)
+            .ToListAsync();
+
+        if (user.Role == UserRole.Moderator && user.ClassId.HasValue)
+        {
+            var moderatorClass = await _context.Classes.FirstOrDefaultAsync(c => c.Id == user.ClassId.Value);
+            if (moderatorClass != null && classes.All(c => c.Id != moderatorClass.Id))
+            {
+                classes.Add(moderatorClass);
+            }
+        }
+
+        return classes.OrderBy(c => c.Name).ToList();
+    }
+
+    private static Class? GetCurrentClass(List<Class> classes, int? classId)
+    {
+        return classId.HasValue
+            ? classes.FirstOrDefault(c => c.Id == classId.Value)
+            : classes.FirstOrDefault();
+    }
+
+    private async Task<bool> CanManageClass(User user, int classId)
+    {
+        return await _context.Classes.AnyAsync(c => c.Id == classId && c.AdminTelegramUserId == user.TelegramUserId);
     }
 }
-

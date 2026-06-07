@@ -1,7 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.AspNetCore.Mvc.Rendering;
 using dotnetTgBot.Models;
 using dotnetTgBot.Persistence;
 
@@ -22,51 +21,37 @@ public class ParentsController : Controller
     [HttpGet]
     public async Task<IActionResult> Index(int? classId)
     {
-        var telegramUserId = long.Parse(User.Identity!.Name!);
-        var user = await _context.Users.FirstOrDefaultAsync(u => u.TelegramUserId == telegramUserId);
-
+        var user = await GetCurrentUser();
         if (user == null || (user.Role != UserRole.Admin && user.Role != UserRole.Moderator))
         {
             return RedirectToAction("Login", "Account");
         }
 
-        int? currentClassId;
-        List<Class> classes;
+        var classes = await GetManageableClasses(user);
+        var currentClass = GetCurrentClass(classes, classId);
 
-        if (user.Role == UserRole.Admin)
+        if (currentClass == null)
         {
-            classes = await _context.Classes
-                .Where(c => c.AdminTelegramUserId == telegramUserId)
-                .OrderBy(c => c.Name)
-                .ToListAsync();
-            currentClassId = classId ?? classes.FirstOrDefault()?.Id;
-        }
-        else
-        {
-            classes = new List<Class>();
-            currentClassId = user.ClassId;
+            ViewBag.Classes = classes;
+            ViewBag.SelectedClassId = null;
+            ViewBag.IsAdmin = user.Role == UserRole.Admin;
+            return View(new List<User>());
         }
 
-        if (currentClassId == null)
-        {
-            return RedirectToAction("Index", "Home");
-        }
-
-        // Родители: по ClassId или ParentClassLinks
         var parentLinkIds = await _context.ParentClassLinks
-            .Where(l => l.ClassId == currentClassId.Value)
+            .Where(l => l.ClassId == currentClass.Id)
             .Select(l => l.UserId)
             .ToListAsync();
 
         var parents = await _context.Users
             .Where(u =>
                 (u.Role == UserRole.Parent || u.Role == UserRole.Moderator || u.Role == UserRole.Unverified) &&
-                (u.ClassId == currentClassId.Value || parentLinkIds.Contains(u.Id)))
+                (u.ClassId == currentClass.Id || parentLinkIds.Contains(u.Id)))
             .OrderBy(u => u.FullName ?? u.FirstName ?? u.Username)
             .ToListAsync();
 
         ViewBag.Classes = classes;
-        ViewBag.SelectedClassId = currentClassId;
+        ViewBag.SelectedClassId = currentClass.Id;
         ViewBag.IsAdmin = user.Role == UserRole.Admin;
         return View(parents);
     }
@@ -75,12 +60,10 @@ public class ParentsController : Controller
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> SetRole(long id, string role, int selectedClassId)
     {
-        var telegramUserId = long.Parse(User.Identity!.Name!);
-        var user = await _context.Users.FirstOrDefaultAsync(u => u.TelegramUserId == telegramUserId);
-
-        if (user == null || user.Role != UserRole.Admin)
+        var user = await GetCurrentUser();
+        if (user == null || user.Role != UserRole.Admin || !await CanManageClass(user, selectedClassId))
         {
-            TempData["Error"] = "Только администратор может менять роли родителей.";
+            TempData["Error"] = "Только администратор класса может менять роли родителей.";
             return RedirectToAction("Index", new { classId = selectedClassId });
         }
 
@@ -95,6 +78,12 @@ public class ParentsController : Controller
         {
             target.Role = UserRole.Parent;
             target.IsVerified = true;
+            if (target.ClassId == null)
+            {
+                target.ClassId = selectedClassId;
+            }
+
+            await EnsureParentClassLink(target.Id, selectedClassId);
         }
         else if (role == nameof(UserRole.Moderator))
         {
@@ -117,12 +106,10 @@ public class ParentsController : Controller
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> RemoveFromClass(long id, int selectedClassId)
     {
-        var telegramUserId = long.Parse(User.Identity!.Name!);
-        var user = await _context.Users.FirstOrDefaultAsync(u => u.TelegramUserId == telegramUserId);
-
-        if (user == null || user.Role != UserRole.Admin)
+        var user = await GetCurrentUser();
+        if (user == null || user.Role != UserRole.Admin || !await CanManageClass(user, selectedClassId))
         {
-            TempData["Error"] = "Только администратор может удалять родителей из класса.";
+            TempData["Error"] = "Только администратор класса может удалять пользователей из класса.";
             return RedirectToAction("Index", new { classId = selectedClassId });
         }
 
@@ -133,7 +120,6 @@ public class ParentsController : Controller
             return RedirectToAction("Index", new { classId = selectedClassId });
         }
 
-        // Удаляем ссылку многие-ко-многим
         var links = await _context.ParentClassLinks
             .Where(l => l.UserId == id && l.ClassId == selectedClassId)
             .ToListAsync();
@@ -142,12 +128,65 @@ public class ParentsController : Controller
         if (target.ClassId == selectedClassId)
         {
             target.ClassId = null;
+            if (target.Role == UserRole.Moderator)
+            {
+                target.Role = UserRole.Parent;
+            }
         }
 
         await _context.SaveChangesAsync();
         TempData["Success"] = "Пользователь удален из класса.";
         return RedirectToAction("Index", new { classId = selectedClassId });
     }
+
+    private async Task<User?> GetCurrentUser()
+    {
+        var telegramUserId = long.Parse(User.Identity!.Name!);
+        return await _context.Users.FirstOrDefaultAsync(u => u.TelegramUserId == telegramUserId);
+    }
+
+    private async Task<List<Class>> GetManageableClasses(User user)
+    {
+        var classes = await _context.Classes
+            .Where(c => c.AdminTelegramUserId == user.TelegramUserId)
+            .OrderBy(c => c.Name)
+            .ToListAsync();
+
+        if (user.Role == UserRole.Moderator && user.ClassId.HasValue)
+        {
+            var moderatorClass = await _context.Classes.FirstOrDefaultAsync(c => c.Id == user.ClassId.Value);
+            if (moderatorClass != null && classes.All(c => c.Id != moderatorClass.Id))
+            {
+                classes.Add(moderatorClass);
+            }
+        }
+
+        return classes.OrderBy(c => c.Name).ToList();
+    }
+
+    private static Class? GetCurrentClass(List<Class> classes, int? classId)
+    {
+        return classId.HasValue
+            ? classes.FirstOrDefault(c => c.Id == classId.Value)
+            : classes.FirstOrDefault();
+    }
+
+    private async Task<bool> CanManageClass(User user, int classId)
+    {
+        return await _context.Classes.AnyAsync(c => c.Id == classId && c.AdminTelegramUserId == user.TelegramUserId);
+    }
+
+    private async Task EnsureParentClassLink(long userId, int classId)
+    {
+        var exists = await _context.ParentClassLinks.AnyAsync(l => l.UserId == userId && l.ClassId == classId);
+        if (!exists)
+        {
+            _context.ParentClassLinks.Add(new ParentClassLink
+            {
+                UserId = userId,
+                ClassId = classId,
+                CreatedAt = DateTime.UtcNow
+            });
+        }
+    }
 }
-
-

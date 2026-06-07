@@ -4,15 +4,20 @@
 }
 
 <h2>Заявки на верификацию</h2>
+
 <div class="mb-3">
     <form method="get" action="/Verifications/Index" class="d-flex align-items-center gap-2">
-        <label for="SelectedClassId" class="form-label mb-0">Класс:</label>
+        <label for="classId" class="form-label mb-0">Класс:</label>
         @Html.DropDownList("classId", new SelectList(ViewBag.Classes ?? new List<Class>(), "Id", "Name", ViewBag.SelectedClassId), new { @class = "form-select", onchange = "this.form.submit()" })
         <noscript><button type="submit" class="btn btn-primary btn-sm">Выбрать</button></noscript>
     </form>
 </div>
 
-@if (Model != null && Model.Any())
+@if (ViewBag.SelectedClassId == null)
+{
+    <div class="alert alert-info">У вас пока нет доступных классов.</div>
+}
+else if (Model != null && Model.Any())
 {
     <div class="row">
         @foreach (var verification in Model)
@@ -30,12 +35,14 @@
                         <div class="btn-group w-100">
                             <form method="post" action="/Verifications/Approve/@verification.Id" class="flex-fill">
                                 @Html.AntiForgeryToken()
+                                <input type="hidden" name="selectedClassId" value="@ViewBag.SelectedClassId" />
                                 <button type="submit" class="btn btn-success w-100">
                                     <i class="bi bi-check-circle"></i> Одобрить
                                 </button>
                             </form>
                             <form method="post" action="/Verifications/Reject/@verification.Id" class="flex-fill">
                                 @Html.AntiForgeryToken()
+                                <input type="hidden" name="selectedClassId" value="@ViewBag.SelectedClassId" />
                                 <button type="submit" class="btn btn-danger w-100" onclick="return confirm('Отклонить заявку?')">
                                     <i class="bi bi-x-circle"></i> Отклонить
                                 </button>
@@ -49,6 +56,5 @@
 }
 else
 {
-    <div class="alert alert-info">Нет заявок на верификацию</div>
+    <div class="alert alert-info">Нет заявок на верификацию для выбранного класса.</div>
 }
-
