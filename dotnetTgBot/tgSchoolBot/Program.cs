@@ -1,11 +1,13 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.RateLimiting;
 using Telegram.Bot;
 using dotnetTgBot.Persistence;
 using dotnetTgBot.Services;
 using RabbitMQ.Client;
 using dotnetTgBot.Interfaces;
 using System.Threading;
+using System.Threading.RateLimiting;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -37,6 +39,30 @@ builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationSc
     });
 
 builder.Services.AddAuthorization();
+
+builder.Services.AddRateLimiter(options =>
+{
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    options.OnRejected = async (context, cancellationToken) =>
+    {
+        context.HttpContext.Response.ContentType = "text/plain; charset=utf-8";
+        await context.HttpContext.Response.WriteAsync(
+            "Слишком много попыток входа. Попробуйте позже.",
+            cancellationToken);
+    };
+
+    options.AddPolicy("login", httpContext =>
+    {
+        var partitionKey = httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+        return RateLimitPartition.GetFixedWindowLimiter(partitionKey, _ => new FixedWindowRateLimiterOptions
+        {
+            PermitLimit = 5,
+            Window = TimeSpan.FromMinutes(1),
+            QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+            QueueLimit = 0
+        });
+    });
+});
 
 // Configure Telegram Bot
 builder.Services.Configure<TelegramBotOptions>(options =>
@@ -146,6 +172,7 @@ app.UseStaticFiles();
 
 app.UseRouting();
 
+app.UseRateLimiter();
 app.UseAuthentication();
 app.UseAuthorization();
 

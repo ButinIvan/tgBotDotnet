@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using System.Security.Claims;
 using dotnetTgBot.Models;
@@ -27,11 +28,12 @@ public class AccountController : Controller
 
     [HttpPost]
     [ValidateAntiForgeryToken]
+    [EnableRateLimiting("login")]
     public async Task<IActionResult> Login(string telegramUserId)
     {
         if (string.IsNullOrWhiteSpace(telegramUserId) || !long.TryParse(telegramUserId, out var userId))
         {
-            ViewBag.Error = "Неверный Telegram User ID";
+            ViewBag.Error = "Неверный Telegram User ID.";
             return View();
         }
 
@@ -46,6 +48,7 @@ public class AccountController : Controller
 
         if (user == null || (user.Role != UserRole.Admin && user.Role != UserRole.Moderator))
         {
+            _logger.LogWarning("Rejected admin panel login for Telegram user {TelegramUserId}", userId);
             ViewBag.Error = "У вас нет доступа к админ-панели. Войти могут только администраторы и модераторы.";
             return View();
         }
@@ -70,6 +73,7 @@ public class AccountController : Controller
             new ClaimsPrincipal(claimsIdentity),
             authProperties);
 
+        _logger.LogInformation("Admin panel login for Telegram user {TelegramUserId}", user.TelegramUserId);
         return RedirectToAction("Index", "Home");
     }
 
