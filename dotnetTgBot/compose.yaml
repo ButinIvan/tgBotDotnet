@@ -2,7 +2,7 @@
   db:
     image: postgres:16-alpine
     container_name: postgres
-    restart: always
+    restart: unless-stopped
     environment:
       POSTGRES_DB: ${DB_NAME}
       POSTGRES_USER: ${DB_USERNAME}
@@ -11,10 +11,16 @@
       - db_data:/var/lib/postgresql/data
     ports:
       - "5433:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
   minio:
     image: quay.io/minio/minio
     container_name: minio
-    restart: always
+    restart: unless-stopped
     environment:
       MINIO_ROOT_USER: ${MINIO_ACCESS_KEY}
       MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY}
@@ -24,6 +30,12 @@
     command: server /data --console-address ":9001"
     volumes:
       - minio_data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
   
   tgschoolbot:
     image: tgschoolbot
@@ -34,7 +46,9 @@
     restart: unless-stopped
     depends_on:
       db:
-        condition: service_started
+        condition: service_healthy
+      minio:
+        condition: service_healthy
       rabbitmq:
         condition: service_healthy
     ports:
@@ -52,6 +66,12 @@
       - ADMIN_PANEL_URL=${ADMIN_PANEL_URL:-http://localhost:5010}
       - APP_TIME_ZONE=${APP_TIME_ZONE:-Europe/Moscow}
       - ASPNETCORE_URLS=http://+:5010
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5010/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
 
   rabbitmq:
     image: rabbitmq:3-management

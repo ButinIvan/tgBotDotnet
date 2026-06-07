@@ -67,4 +67,5 @@ dotnet build dotnetTgBot.sln
 - The app applies EF Core migrations on startup.
 - Required environment variables are validated at startup.
 - Report uploads are limited to 10 MB and common document/image extensions.
-- The current admin login form still uses Telegram User ID. Before real production use, replace it with Telegram Login Widget or a one-time code flow through the bot.
+- Admin panel login requires a Telegram User ID and a one-time code from the `/adminpanel` bot command.
+- Docker Compose waits for PostgreSQL, RabbitMQ, and MinIO healthchecks before starting the app.
