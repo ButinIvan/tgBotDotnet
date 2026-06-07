@@ -1,14 +1,16 @@
 @model News
 @{
-    ViewData["Title"] = "Редактировать новость";
+    ViewData["Title"] = "Редактировать запись";
+    var isReport = Model.Type == NewsType.Report;
 }
 
-<h2>Редактировать новость</h2>
+<h2>Редактировать запись</h2>
 
 <form method="post" action="/News/Edit/@Model.Id">
     @Html.AntiForgeryToken()
+    @Html.ValidationSummary(true, "", new { @class = "alert alert-danger" })
     <input type="hidden" name="Id" value="@Model.Id" />
-    
+
     <div class="mb-3">
         <label for="ClassId" class="form-label">Класс</label>
         @Html.DropDownList("ClassId", (IEnumerable<SelectListItem>)ViewBag.Classes, new { @class = "form-select", required = "required" })
@@ -17,19 +19,31 @@
     <div class="mb-3">
         <label for="Type" class="form-label">Тип</label>
         <select class="form-select" id="Type" name="Type" required>
-            <option value="News" selected="@(Model.Type == NewsType.News)">📰 Новость</option>
-            <option value="Report" selected="@(Model.Type == NewsType.Report)">📊 Отчет</option>
+            @if (Model.Type == NewsType.News)
+            {
+                <option value="News" selected>Новость</option>
+                <option value="Report">Отчет</option>
+            }
+            else
+            {
+                <option value="News">Новость</option>
+                <option value="Report" selected>Отчет</option>
+            }
         </select>
+        @if (isReport)
+        {
+            <div class="form-text">Файл отчета меняется только через создание нового отчета.</div>
+        }
+    </div>
+
+    <div class="mb-3" id="content-block">
+        <label for="Content" class="form-label">Содержание</label>
+        <textarea class="form-control" id="Content" name="Content" rows="10">@Model.Content</textarea>
     </div>
 
     <div class="mb-3">
         <label for="Title" class="form-label">Заголовок</label>
         <input type="text" class="form-control" id="Title" name="Title" value="@Model.Title" required>
-    </div>
-
-    <div class="mb-3">
-        <label for="Content" class="form-label">Содержание</label>
-        <textarea class="form-control" id="Content" name="Content" rows="10" required>@Model.Content</textarea>
     </div>
 
     <div class="d-flex gap-2">
@@ -38,3 +52,19 @@
     </div>
 </form>
 
+<script>
+    (function() {
+        const typeSelect = document.getElementById('Type');
+        const contentBlock = document.getElementById('content-block');
+        const contentInput = document.getElementById('Content');
+
+        function toggleContent() {
+            const isReport = typeSelect.value === 'Report';
+            contentBlock.style.display = isReport ? 'none' : 'block';
+            contentInput.required = !isReport;
+        }
+
+        typeSelect.addEventListener('change', toggleContent);
+        toggleContent();
+    })();
+</script>

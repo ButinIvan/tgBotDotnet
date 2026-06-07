@@ -1,6 +1,6 @@
 @model News
 @{
-    ViewData["Title"] = "Создать новость";
+    ViewData["Title"] = "Создать запись";
 }
 
 <h2>Создать новость или отчет</h2>
@@ -13,7 +13,7 @@
         <label for="ClassId" class="form-label">Класс</label>
         @Html.DropDownList("ClassId", (IEnumerable<SelectListItem>)ViewBag.Classes, new { @class = "form-select", required = "required" })
     </div>
-    
+
     <div class="mb-3">
         <label for="Type" class="form-label">Тип</label>
         @{
@@ -22,13 +22,13 @@
         <select class="form-select" id="Type" name="Type" required>
             @if (selectedType == NewsType.News)
             {
-                <option value="News" selected>📰 Новость</option>
-                <option value="Report">📊 Отчет</option>
+                <option value="News" selected>Новость</option>
+                <option value="Report">Отчет</option>
             }
             else
             {
-                <option value="News">📰 Новость</option>
-                <option value="Report" selected>📊 Отчет</option>
+                <option value="News">Новость</option>
+                <option value="Report" selected>Отчет</option>
             }
         </select>
     </div>
@@ -46,6 +46,7 @@
     <div class="mb-3" id="report-file-block" style="display:@(Model?.Type == NewsType.Report ? "block" : "none")">
         <label for="reportFile" class="form-label">Файл отчета</label>
         <input type="file" class="form-control" id="reportFile" name="reportFile" accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.jpg,.jpeg,.png">
+        <div class="form-text">PDF, Office-документы или изображения JPG/PNG. Максимум 10 МБ.</div>
     </div>
 
     <div class="d-flex gap-2">
@@ -61,17 +62,16 @@
         const contentBlock = document.getElementById('content-block');
         const contentInput = document.getElementById('Content');
         const fileInput = document.getElementById('reportFile');
+
         function toggleFile() {
             const isReport = typeSelect.value === 'Report';
             fileBlock.style.display = isReport ? 'block' : 'none';
             contentBlock.style.display = isReport ? 'none' : 'block';
-            // content не обязателен для отчета
             contentInput.required = !isReport;
-            // файл обязателен для отчета
             fileInput.required = isReport;
         }
+
         typeSelect.addEventListener('change', toggleFile);
         toggleFile();
     })();
 </script>
-

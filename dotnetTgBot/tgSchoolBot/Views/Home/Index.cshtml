@@ -18,7 +18,7 @@ else
 {
     <div class="mb-3">
         <form method="get" action="/Home/Index" class="d-flex align-items-center gap-2">
-            <label for="SelectedClassId" class="form-label mb-0">Класс:</label>
+            <label for="classId" class="form-label mb-0">Класс:</label>
             @Html.DropDownList("classId", new SelectList(classes, "Id", "Name", ViewBag.SelectedClassId), new { @class = "form-select", onchange = "this.form.submit()" })
             <noscript><button type="submit" class="btn btn-primary btn-sm">Выбрать</button></noscript>
         </form>
@@ -27,7 +27,7 @@ else
     <div class="d-flex justify-content-between align-items-center mb-3">
         <h4>Последние новости и отчеты</h4>
         <a href="/News/Create" class="btn btn-primary">
-            <i class="bi bi-plus-circle"></i> Создать новость
+            <i class="bi bi-plus-circle"></i> Создать
         </a>
     </div>
 
@@ -36,6 +36,10 @@ else
         <div class="row">
             @foreach (var news in Model)
             {
+                var preview = string.IsNullOrWhiteSpace(news.Content)
+                    ? "Без текстового описания"
+                    : news.Content.Length > 100 ? news.Content.Substring(0, 100) + "..." : news.Content;
+
                 <div class="col-md-6 mb-3">
                     <div class="card">
                         <div class="card-header d-flex justify-content-between">
@@ -46,12 +50,12 @@ else
                         </div>
                         <div class="card-body">
                             <h5 class="card-title">@news.Title</h5>
-                            <p class="card-text">@(news.Content.Length > 100 ? news.Content.Substring(0, 100) + "..." : news.Content)</p>
+                            <p class="card-text">@preview</p>
                             <div class="btn-group">
                                 <a href="/News/Edit/@news.Id" class="btn btn-sm btn-outline-primary">Редактировать</a>
                                 <form method="post" action="/News/Delete/@news.Id" class="d-inline">
                                     @Html.AntiForgeryToken()
-                                    <button type="submit" class="btn btn-sm btn-outline-danger" onclick="return confirm('Удалить эту новость?')">Удалить</button>
+                                    <button type="submit" class="btn btn-sm btn-outline-danger" onclick="return confirm('Удалить эту запись?')">Удалить</button>
                                 </form>
                             </div>
                         </div>
@@ -63,7 +67,7 @@ else
     else
     {
         <div class="alert alert-info">
-            Пока нет новостей или отчетов. <a href="/News/Create">Создайте первую новость</a>
+            Пока нет новостей или отчетов. <a href="/News/Create">Создайте первую запись</a>.
         </div>
     }
 }

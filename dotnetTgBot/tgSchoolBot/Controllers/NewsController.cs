@@ -160,18 +160,18 @@ public class NewsController : Controller
             return RedirectToAction("Login", "Account");
         }
 
-        var ownedClasses = await GetManageableClasses(user);
-        var ownedClassIds = ownedClasses.Select(c => c.Id).ToHashSet();
+        var manageableClasses = await GetManageableClasses(user);
+        var manageableClassIds = manageableClasses.Select(c => c.Id).ToHashSet();
 
         var news = await _context.News
-            .FirstOrDefaultAsync(n => n.Id == id && ownedClassIds.Contains(n.ClassId));
+            .FirstOrDefaultAsync(n => n.Id == id && manageableClassIds.Contains(n.ClassId));
 
         if (news == null)
         {
             return NotFound();
         }
 
-        ViewBag.Classes = BuildClassSelectList(ownedClasses, news.ClassId);
+        ViewBag.Classes = BuildClassSelectList(manageableClasses, news.ClassId);
         return View(news);
     }
 
@@ -193,11 +193,17 @@ public class NewsController : Controller
             return NotFound();
         }
 
-        var ownedClasses = await GetManageableClasses(user);
-        var ownedClassIds = ownedClasses.Select(c => c.Id).ToHashSet();
+        if (news.Type == NewsType.Report)
+        {
+            ModelState.Remove(nameof(News.Content));
+            news.Content = string.Empty;
+        }
+
+        var manageableClasses = await GetManageableClasses(user);
+        var manageableClassIds = manageableClasses.Select(c => c.Id).ToHashSet();
 
         var existingNews = await _context.News
-            .FirstOrDefaultAsync(n => n.Id == id && ownedClassIds.Contains(n.ClassId));
+            .FirstOrDefaultAsync(n => n.Id == id && manageableClassIds.Contains(n.ClassId));
 
         if (existingNews == null)
         {
@@ -212,19 +218,24 @@ public class NewsController : Controller
             {
                 ModelState.AddModelError(string.Empty, "Выберите класс, которым вы управляете.");
             }
+            else if (news.Type == NewsType.Report && existingNews.Type != NewsType.Report)
+            {
+                ModelState.AddModelError(string.Empty, "Чтобы добавить файл отчета, создайте новый отчет.");
+            }
             else
             {
                 existingNews.Title = news.Title;
-                existingNews.Content = news.Content;
+                existingNews.Content = news.Type == NewsType.Report ? string.Empty : news.Content;
                 existingNews.Type = news.Type;
                 existingNews.ClassId = news.ClassId;
 
                 await _context.SaveChangesAsync();
+                TempData["Success"] = "Запись обновлена.";
                 return RedirectToAction("Index", "Home");
             }
         }
 
-        ViewBag.Classes = BuildClassSelectList(ownedClasses, news.ClassId);
+        ViewBag.Classes = BuildClassSelectList(manageableClasses, news.ClassId);
         return View(news);
     }
 
@@ -264,6 +275,7 @@ public class NewsController : Controller
 
             _context.News.Remove(news);
             await _context.SaveChangesAsync();
+            TempData["Success"] = "Запись удалена.";
         }
 
         return RedirectToAction("Index", "Home");
