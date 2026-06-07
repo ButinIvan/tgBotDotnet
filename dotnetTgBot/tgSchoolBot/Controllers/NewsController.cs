@@ -253,6 +253,18 @@ public class NewsController : Controller
 
         if (news != null)
         {
+            if (!string.IsNullOrWhiteSpace(news.FilePath))
+            {
+                try
+                {
+                    await _s3Repository.DeleteAsync(news.FilePath);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Failed to delete report file from S3. NewsId: {NewsId}, FilePath: {FilePath}", news.Id, news.FilePath);
+                }
+            }
+
             _context.News.Remove(news);
             await _context.SaveChangesAsync();
         }
