@@ -314,6 +314,10 @@ public partial class UpdateHandler
 
         // Удаляем связанные записи
         var news = _dbContext.News.Where(n => n.ClassId == classId);
+        var reportFilePaths = await news
+            .Where(n => !string.IsNullOrWhiteSpace(n.FilePath))
+            .Select(n => n.FilePath!)
+            .ToListAsync(cancellationToken);
         var verifications = _dbContext.ParentVerifications.Where(v => v.ClassId == classId);
         var links = _dbContext.ParentClassLinks.Where(l => l.ClassId == classId);
 
@@ -334,6 +338,18 @@ public partial class UpdateHandler
         _dbContext.Classes.Remove(targetClass);
 
         await _dbContext.SaveChangesAsync(cancellationToken);
+
+        foreach (var filePath in reportFilePaths)
+        {
+            try
+            {
+                await _s3Repository.DeleteAsync(filePath);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to delete report file after class deletion. ClassId: {ClassId}, FilePath: {FilePath}", classId, filePath);
+            }
+        }
 
         // Очистка состояния
         _userStates.TryRemove(user.TelegramUserId, out _);
