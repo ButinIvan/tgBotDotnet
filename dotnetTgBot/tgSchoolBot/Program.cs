@@ -18,7 +18,7 @@ builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
 // Configure database - PostgreSQL
-var connectionString = envService.GetVariable("CONNECTION_STRING");
+var connectionString = envService.GetRequiredVariable("CONNECTION_STRING");
 
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
     options.UseNpgsql(connectionString));
@@ -41,20 +41,20 @@ builder.Services.AddAuthorization();
 // Configure Telegram Bot
 builder.Services.Configure<TelegramBotOptions>(options =>
 {
-    options.BotToken = envService.GetVariable("TELEGRAM_BOT_TOKEN");
+    options.BotToken = envService.GetRequiredVariable("TELEGRAM_BOT_TOKEN");
 });
 
 // Register Telegram Bot Client
 builder.Services.AddSingleton<ITelegramBotClient>(sp =>
 {
-    var token = envService.GetVariable("TELEGRAM_BOT_TOKEN");
+    var token = envService.GetRequiredVariable("TELEGRAM_BOT_TOKEN");
     return new TelegramBotClient(token);
 });
 
 // Register RabbitMQ connection
 builder.Services.AddSingleton<IConnection>(sp =>
 {
-    var uri = envService.GetVariable("RABBITMQ_CONNECTION");
+    var uri = envService.GetRequiredVariable("RABBITMQ_CONNECTION");
     var factory = new ConnectionFactory
     {
         Uri = new Uri(uri),
@@ -88,8 +88,8 @@ builder.Services.AddHostedService<NewsQueueConsumer>();
 builder.Services.AddSingleton<IS3Repository>(sp =>
 {
     var endpoint = envService.GetVariable("MINIO_ENDPOINT", "minio:9000");
-    var accessKey = envService.GetVariable("MINIO_ACCESS_KEY");
-    var secretKey = envService.GetVariable("MINIO_SECRET_KEY");
+    var accessKey = envService.GetRequiredVariable("MINIO_ACCESS_KEY");
+    var secretKey = envService.GetRequiredVariable("MINIO_SECRET_KEY");
     var publicEndpoint = envService.GetVariable("MINIO_PUBLIC_ENDPOINT", "minio:9000");
     var logger = sp.GetRequiredService<ILogger<MinioService>>();
     return new MinioService(endpoint, accessKey, secretKey, logger, publicEndpoint);

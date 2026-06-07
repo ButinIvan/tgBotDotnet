@@ -17,7 +17,7 @@ public class RabbitMqService : IRabbitMqService
     public RabbitMqService(IConnection connection, EnvService envService)
     {
         _connection = connection;
-        QueueName = envService.GetVariable("RABBITMQ_QUEUE") ?? "tg_bot_queue";
+        QueueName = envService.GetVariable("RABBITMQ_QUEUE", "tg_bot_queue");
 
         Channel = _connection.CreateModel();
         Channel.QueueDeclare(

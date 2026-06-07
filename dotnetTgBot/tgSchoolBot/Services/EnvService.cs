@@ -2,13 +2,20 @@ namespace dotnetTgBot.Services;
 
 public class EnvService
 {
-    public string GetVariable(string envItem, string defaultValue = "")
+    public string GetRequiredVariable(string name)
     {
-        var value = Environment.GetEnvironmentVariable(envItem);
-        if (string.IsNullOrEmpty(value))
+        var value = Environment.GetEnvironmentVariable(name);
+        if (string.IsNullOrWhiteSpace(value))
         {
-            Console.WriteLine($"⚠️  Warning: Environment variable '{envItem}' is not set or empty.");
+            throw new InvalidOperationException($"Required environment variable '{name}' is not set.");
         }
-        return value ?? defaultValue;
+
+        return value;
+    }
+
+    public string GetVariable(string name, string defaultValue)
+    {
+        var value = Environment.GetEnvironmentVariable(name);
+        return string.IsNullOrWhiteSpace(value) ? defaultValue : value;
     }
 }
