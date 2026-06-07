@@ -29,7 +29,12 @@
                             <div class="mb-3">
                                 <label for="telegramUserId" class="form-label">Telegram User ID</label>
                                 <input type="text" class="form-control" id="telegramUserId" name="telegramUserId" required>
-                                <small class="form-text text-muted">Введите ваш Telegram User ID (можно узнать у бота @@userinfobot)</small>
+                                <small class="form-text text-muted">Отправьте боту команду /adminpanel, чтобы получить ID и код входа.</small>
+                            </div>
+                            <div class="mb-3">
+                                <label for="loginCode" class="form-label">Код входа</label>
+                                <input type="text" class="form-control" id="loginCode" name="loginCode" inputmode="numeric" autocomplete="one-time-code" required>
+                                <small class="form-text text-muted">Код действует 10 минут и используется один раз.</small>
                             </div>
                             <button type="submit" class="btn btn-primary w-100">Войти</button>
                         </form>

@@ -52,7 +52,8 @@ public class TelegramBotService : BackgroundService
             var handlerLogger = loggerFactory.CreateLogger<UpdateHandler>();
             var newsQueueProducer = scope.ServiceProvider.GetRequiredService<INewsQueueProducer>();
             var s3 = scope.ServiceProvider.GetRequiredService<IS3Repository>();
-            var handler = new UpdateHandler(botClient, dbContext, handlerLogger, newsQueueProducer, s3);
+            var adminLoginCodes = scope.ServiceProvider.GetRequiredService<IAdminLoginCodeService>();
+            var handler = new UpdateHandler(botClient, dbContext, handlerLogger, newsQueueProducer, s3, adminLoginCodes);
 
             await handler.HandleUpdate(update, cancellationToken);
         }

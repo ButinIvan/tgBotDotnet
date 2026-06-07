@@ -21,6 +21,7 @@ public partial class UpdateHandler
     private readonly ILogger<UpdateHandler> _logger;
     private readonly INewsQueueProducer _newsQueueProducer;
     private readonly IS3Repository _s3Repository;
+    private readonly IAdminLoginCodeService _adminLoginCodes;
     // Статус пользователей между сообщениями
     private static readonly UserStateStore _userStates = new(TimeSpan.FromMinutes(30));
 
@@ -36,13 +37,15 @@ public partial class UpdateHandler
         ApplicationDbContext dbContext,
         ILogger<UpdateHandler> logger,
         INewsQueueProducer newsQueueProducer,
-        IS3Repository s3Repository)
+        IS3Repository s3Repository,
+        IAdminLoginCodeService adminLoginCodes)
     {
         _botClient = botClient;
         _dbContext = dbContext;
         _logger = logger;
         _newsQueueProducer = newsQueueProducer;
         _s3Repository = s3Repository;
+        _adminLoginCodes = adminLoginCodes;
     }
 
     public async Task HandleUpdate(Update update, CancellationToken cancellationToken)

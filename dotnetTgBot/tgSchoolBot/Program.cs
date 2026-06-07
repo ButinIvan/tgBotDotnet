@@ -109,6 +109,7 @@ builder.Services.AddSingleton<IConnection>(sp =>
 builder.Services.AddSingleton<IRabbitMqService, RabbitMqService>();
 builder.Services.AddSingleton<INewsQueueProducer, NewsQueueProducer>();
 builder.Services.AddHostedService<NewsQueueConsumer>();
+builder.Services.AddSingleton<IAdminLoginCodeService, AdminLoginCodeService>();
 
 // Minio / S3
 builder.Services.AddSingleton<IS3Repository>(sp =>

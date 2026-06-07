@@ -192,10 +192,13 @@ public partial class UpdateHandler
 
         var baseUrl = Environment.GetEnvironmentVariable("ADMIN_PANEL_URL") ?? "http://localhost:5010";
         var loginUrl = $"{baseUrl}/Account/Login";
+        var loginCode = _adminLoginCodes.CreateCode(user.TelegramUserId);
 
         var text = "Админ-панель\n\n";
-        text += "Для доступа к веб-интерфейсу:\n";
-        text += $"Перейдите по ссылке: {loginUrl} и введите ваш Telegram User ID: " + user.TelegramUserId;
+        text += $"Ссылка: {loginUrl}\n";
+        text += $"Telegram User ID: {user.TelegramUserId}\n";
+        text += $"Код входа: {loginCode}\n\n";
+        text += "Код действует 10 минут и будет использован только один раз.";
 
         await _botClient.SendTextMessageAsync(
             chatId,

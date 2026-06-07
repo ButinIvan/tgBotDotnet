@@ -6,6 +6,7 @@ using Microsoft.EntityFrameworkCore;
 using System.Security.Claims;
 using dotnetTgBot.Models;
 using dotnetTgBot.Persistence;
+using dotnetTgBot.Services;
 
 namespace dotnetTgBot.Controllers;
 
@@ -13,11 +14,16 @@ public class AccountController : Controller
 {
     private readonly ApplicationDbContext _context;
     private readonly ILogger<AccountController> _logger;
+    private readonly IAdminLoginCodeService _adminLoginCodes;
 
-    public AccountController(ApplicationDbContext context, ILogger<AccountController> logger)
+    public AccountController(
+        ApplicationDbContext context,
+        ILogger<AccountController> logger,
+        IAdminLoginCodeService adminLoginCodes)
     {
         _context = context;
         _logger = logger;
+        _adminLoginCodes = adminLoginCodes;
     }
 
     [HttpGet]
@@ -29,7 +35,7 @@ public class AccountController : Controller
     [HttpPost]
     [ValidateAntiForgeryToken]
     [EnableRateLimiting("login")]
-    public async Task<IActionResult> Login(string telegramUserId)
+    public async Task<IActionResult> Login(string telegramUserId, string loginCode)
     {
         if (string.IsNullOrWhiteSpace(telegramUserId) || !long.TryParse(telegramUserId, out var userId))
         {
@@ -37,10 +43,16 @@ public class AccountController : Controller
             return View();
         }
 
-        return await ProcessLogin(userId);
+        if (string.IsNullOrWhiteSpace(loginCode))
+        {
+            ViewBag.Error = "Введите одноразовый код из Telegram.";
+            return View();
+        }
+
+        return await ProcessLogin(userId, loginCode);
     }
 
-    private async Task<IActionResult> ProcessLogin(long userId)
+    private async Task<IActionResult> ProcessLogin(long userId, string loginCode)
     {
         var user = await _context.Users
             .Include(u => u.Class)
@@ -50,6 +62,13 @@ public class AccountController : Controller
         {
             _logger.LogWarning("Rejected admin panel login for Telegram user {TelegramUserId}", userId);
             ViewBag.Error = "У вас нет доступа к админ-панели. Войти могут только администраторы и модераторы.";
+            return View();
+        }
+
+        if (!_adminLoginCodes.TryConsumeCode(user.TelegramUserId, loginCode))
+        {
+            _logger.LogWarning("Rejected admin panel login for Telegram user {TelegramUserId}: invalid one-time code", user.TelegramUserId);
+            ViewBag.Error = "Неверный или устаревший код входа. Запросите новый код командой /adminpanel.";
             return View();
         }
 
