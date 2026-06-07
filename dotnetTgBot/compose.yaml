@@ -48,6 +48,8 @@
       - MINIO_ENDPOINT=minio:9000
       - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY}
       - MINIO_SECRET_KEY=${MINIO_SECRET_KEY}
+      - MINIO_PUBLIC_ENDPOINT=${MINIO_PUBLIC_ENDPOINT:-http://localhost:9000}
+      - ADMIN_PANEL_URL=${ADMIN_PANEL_URL:-http://localhost:5010}
       - ASPNETCORE_URLS=http://+:5010
 
   rabbitmq:
