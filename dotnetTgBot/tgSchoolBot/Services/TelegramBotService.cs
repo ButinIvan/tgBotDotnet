@@ -2,11 +2,8 @@ using Telegram.Bot;
 using Telegram.Bot.Polling;
 using Telegram.Bot.Types;
 using Telegram.Bot.Types.Enums;
-using Microsoft.Extensions.Logging;
-using dotnetTgBot.Models;
 using dotnetTgBot.Persistence;
 using dotnetTgBot.Interfaces;
-using Microsoft.EntityFrameworkCore;
 
 namespace dotnetTgBot.Services;
 
@@ -37,11 +34,10 @@ public class TelegramBotService : BackgroundService
             updateHandler: HandleUpdateAsync,
             pollingErrorHandler: HandlePollingErrorAsync,
             receiverOptions: receiverOptions,
-            cancellationToken: stoppingToken
-        );
+            cancellationToken: stoppingToken);
 
         var me = await _botClient.GetMeAsync(stoppingToken);
-        _logger.LogInformation($"Бот @{me.Username} запущен");
+        _logger.LogInformation("Telegram bot @{Username} started", me.Username);
 
         await Task.Delay(Timeout.Infinite, stoppingToken);
     }
@@ -62,13 +58,13 @@ public class TelegramBotService : BackgroundService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Ошибка в HandleUpdateAsync");
+            _logger.LogError(ex, "Error in Telegram update handler");
         }
     }
 
     private Task HandlePollingErrorAsync(ITelegramBotClient botClient, Exception exception, CancellationToken cancellationToken)
     {
-        _logger.LogError(exception, "Ошибка при обработке обновлений");
+        _logger.LogError(exception, "Telegram polling error");
         return Task.CompletedTask;
     }
 }
@@ -77,4 +73,3 @@ public class TelegramBotOptions
 {
     public string BotToken { get; set; } = string.Empty;
 }
-

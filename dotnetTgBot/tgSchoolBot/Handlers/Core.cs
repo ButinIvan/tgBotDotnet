@@ -3,7 +3,6 @@ using Telegram.Bot;
 using Telegram.Bot.Types;
 using Telegram.Bot.Types.Enums;
 using Telegram.Bot.Types.ReplyMarkups;
-using System.Collections.Concurrent;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using dotnetTgBot.Models;
@@ -23,7 +22,7 @@ public partial class UpdateHandler
     private readonly INewsQueueProducer _newsQueueProducer;
     private readonly IS3Repository _s3Repository;
     // Статус пользователей между сообщениями
-    private static readonly ConcurrentDictionary<long, UserState> _userStates = new();
+    private static readonly UserStateStore _userStates = new(TimeSpan.FromMinutes(30));
 
     private sealed class ClassInfo
     {
