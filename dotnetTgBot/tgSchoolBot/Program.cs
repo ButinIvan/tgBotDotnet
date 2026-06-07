@@ -91,7 +91,8 @@ builder.Services.AddSingleton<IS3Repository>(sp =>
     var accessKey = envService.GetVariable("MINIO_ACCESS_KEY");
     var secretKey = envService.GetVariable("MINIO_SECRET_KEY");
     var publicEndpoint = envService.GetVariable("MINIO_PUBLIC_ENDPOINT", "minio:9000");
-    return new MinioService(endpoint, accessKey, secretKey, publicEndpoint);
+    var logger = sp.GetRequiredService<ILogger<MinioService>>();
+    return new MinioService(endpoint, accessKey, secretKey, logger, publicEndpoint);
 });
 
 // Register Telegram Bot Service as background service

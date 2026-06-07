@@ -8,11 +8,18 @@ namespace dotnetTgBot.Services;
 public class MinioService : IS3Repository
 {
     private readonly IMinioClient _minioClient;
+    private readonly ILogger<MinioService> _logger;
     private readonly string _bucketName = "dotnet-school-bot";
     private readonly string? _publicEndpointBase;
 
-    public MinioService(string endpoint, string accessKey, string secretKey, string? publicEndpoint = null)
+    public MinioService(
+        string endpoint,
+        string accessKey,
+        string secretKey,
+        ILogger<MinioService> logger,
+        string? publicEndpoint = null)
     {
+        _logger = logger;
         _publicEndpointBase = string.IsNullOrWhiteSpace(publicEndpoint) ? null : publicEndpoint;
 
         _minioClient = new MinioClient()
@@ -24,49 +31,38 @@ public class MinioService : IS3Repository
 
     private async Task EnsureBucketExistsAsync()
     {
-        Console.WriteLine($"🔹 Проверяем существование бакета: {_bucketName}");
         var exists = await _minioClient.BucketExistsAsync(new BucketExistsArgs().WithBucket(_bucketName));
 
         if (!exists)
         {
-            Console.WriteLine("🔹 Бакет не найден, создаем новый...");
+            _logger.LogInformation("Creating MinIO bucket {BucketName}", _bucketName);
             await _minioClient.MakeBucketAsync(new MakeBucketArgs().WithBucket(_bucketName));
-            Console.WriteLine("✅ Бакет успешно создан.");
+            return;
         }
-        else
-        {
-            Console.WriteLine("✅ Бакет уже существует.");
-        }
+
+        _logger.LogDebug("MinIO bucket {BucketName} already exists", _bucketName);
     }
 
     public async Task<string> UploadDocumentAsync(Guid userId, string content)
     {
         await EnsureBucketExistsAsync();
 
-        string documentName = $"{Guid.NewGuid()}.txt";
-        string objectName = $"{userId}/{documentName}";
+        var documentName = $"{Guid.NewGuid()}.txt";
+        var objectName = $"{userId}/{documentName}";
 
-        byte[] data = Encoding.UTF8.GetBytes(content);
+        var data = Encoding.UTF8.GetBytes(content);
         using var stream = new MemoryStream(data);
 
-        Console.WriteLine($"🔹 Загружаем документ: {objectName} в бакет {_bucketName}");
+        var args = new PutObjectArgs()
+            .WithBucket(_bucketName)
+            .WithObject(objectName)
+            .WithObjectSize(data.Length)
+            .WithStreamData(stream)
+            .WithContentType("text/plain");
 
-        try
-        {
-            var args = new PutObjectArgs()
-                .WithBucket(_bucketName)
-                .WithObject(objectName)
-                .WithObjectSize(data.Length)
-                .WithStreamData(stream)
-                .WithContentType("text/plain");
+        await _minioClient.PutObjectAsync(args);
+        _logger.LogInformation("Uploaded document to MinIO object {ObjectName}", objectName);
 
-            await _minioClient.PutObjectAsync(args);
-            Console.WriteLine("✅ Документ успешно загружен в MinIO");
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"❌ Ошибка загрузки в MinIO: {ex.Message}");
-        }
         return objectName;
     }
 
@@ -81,7 +77,7 @@ public class MinioService : IS3Repository
                 await stream.CopyToAsync(memoryStream);
                 memoryStream.Seek(0, SeekOrigin.Begin);
             }));
-    
+
         return Encoding.UTF8.GetString(memoryStream.ToArray());
     }
 
@@ -102,10 +98,9 @@ public class MinioService : IS3Repository
 
     public async Task DeleteAsync(string s3Path)
     {
-        var objectName = $"{s3Path}";
         var args = new RemoveObjectArgs()
             .WithBucket(_bucketName)
-            .WithObject(objectName);
+            .WithObject(s3Path);
         await _minioClient.RemoveObjectAsync(args);
     }
 
@@ -121,6 +116,8 @@ public class MinioService : IS3Repository
             .WithContentType(contentType);
 
         await _minioClient.PutObjectAsync(args);
+        _logger.LogInformation("Uploaded file to MinIO object {ObjectName}", objectName);
+
         return objectName;
     }
 
@@ -134,15 +131,25 @@ public class MinioService : IS3Repository
         var url = await _minioClient.PresignedGetObjectAsync(args);
 
         if (string.IsNullOrWhiteSpace(_publicEndpointBase))
-            return null; // не отправляем кнопку, если внешний хост не задан
+        {
+            return null;
+        }
 
         if (!Uri.TryCreate(_publicEndpointBase, UriKind.Absolute, out var targetBase))
+        {
             return null;
+        }
+
         if (string.IsNullOrWhiteSpace(targetBase.Host))
+        {
             return null;
+        }
+
         if (!string.Equals(targetBase.Scheme, Uri.UriSchemeHttp, StringComparison.OrdinalIgnoreCase) &&
             !string.Equals(targetBase.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase))
+        {
             return null;
+        }
 
         try
         {
