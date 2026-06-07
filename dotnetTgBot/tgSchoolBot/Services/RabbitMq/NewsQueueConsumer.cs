@@ -104,8 +104,9 @@ public class NewsQueueConsumer : BackgroundService
             .Distinct()
             .ToListAsync(cancellationToken);
 
-        var content = (message.Content ?? string.Empty).TrimEnd();
-        var text = $"<b>{message.Title}</b>\n\n{content}\n\nДата: {AppDateTime.Format(message.CreatedAtUtc)}";
+        var title = TelegramHtml.Encode(message.Title);
+        var content = TelegramHtml.Encode((message.Content ?? string.Empty).TrimEnd());
+        var text = $"<b>{title}</b>\n\n{content}\n\nДата: {AppDateTime.Format(message.CreatedAtUtc)}";
 
         foreach (var tgId in recipients)
         {

@@ -239,8 +239,9 @@ public partial class UpdateHandler
         var startIdx = (1 - 1) * pageSize;
         var pageText = string.Join("\n\n", news.Select((item, idx) =>
         {
-            var content = (item.Content ?? string.Empty).TrimEnd();
-            return $"<b>{startIdx + idx + 1}. {item.Title}</b>\n\n{content}\n\nДата: {AppDateTime.Format(item.CreatedAt)}";
+            var title = TelegramHtml.Encode(item.Title);
+            var content = TelegramHtml.Encode((item.Content ?? string.Empty).TrimEnd());
+            return $"<b>{startIdx + idx + 1}. {title}</b>\n\n{content}\n\nДата: {AppDateTime.Format(item.CreatedAt)}";
         }));
 
         var keyboard = BuildNewsPaginationKeyboard(targetClass.Id, 1, pages);
@@ -348,8 +349,9 @@ public partial class UpdateHandler
         var startIdx = skip;
         var pageText = string.Join("\n\n", news.Select((item, idx) =>
         {
-            var content = (item.Content ?? string.Empty).TrimEnd();
-            return $"<b>{startIdx + idx + 1}. {item.Title}</b>\n\n{content}\n\nДата: {AppDateTime.Format(item.CreatedAt)}";
+            var title = TelegramHtml.Encode(item.Title);
+            var content = TelegramHtml.Encode((item.Content ?? string.Empty).TrimEnd());
+            return $"<b>{startIdx + idx + 1}. {title}</b>\n\n{content}\n\nДата: {AppDateTime.Format(item.CreatedAt)}";
         }));
 
         var keyboard = BuildNewsPaginationKeyboard(classId, page, totalPages);
@@ -439,8 +441,9 @@ public partial class UpdateHandler
         var startIdx = skip;
         var text = string.Join("\n\n", reports.Select((r, idx) =>
         {
-            var fileName = string.IsNullOrWhiteSpace(r.FileName) ? "report" : r.FileName;
-            return $"{startIdx + idx + 1}. <b>{r.Title}</b>\n{fileName}\nДата: {AppDateTime.Format(r.CreatedAt)}";
+            var title = TelegramHtml.Encode(r.Title);
+            var fileName = TelegramHtml.Encode(string.IsNullOrWhiteSpace(r.FileName) ? "report" : r.FileName);
+            return $"{startIdx + idx + 1}. <b>{title}</b>\n{fileName}\nДата: {AppDateTime.Format(r.CreatedAt)}";
         }));
 
         var keyboard = BuildReportsKeyboard(reports, classId, page, totalPages);

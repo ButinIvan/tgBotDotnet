@@ -28,9 +28,11 @@ public class NotificationService
             .ToListAsync();
 
         var typeText = news.Type == NewsType.News ? "Новость" : "Отчет";
+        var title = TelegramHtml.Encode(news.Title);
+        var content = TelegramHtml.Encode(news.Content);
         var message = $"{typeText}\n\n" +
-                     $"<b>{news.Title}</b>\n\n" +
-                     $"{news.Content}\n\n" +
+                     $"<b>{title}</b>\n\n" +
+                     $"{content}\n\n" +
                      $"Дата: {AppDateTime.Format(news.CreatedAt)}";
 
         foreach (var parent in parents)

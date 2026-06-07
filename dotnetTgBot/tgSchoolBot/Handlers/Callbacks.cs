@@ -186,7 +186,7 @@ public partial class UpdateHandler
                     }
 
                     var fileName = string.IsNullOrWhiteSpace(report.FileName) ? "report" : report.FileName;
-                    var caption = $"<b>{report.Title}</b>\n\n{fileName}\n\nДата: {AppDateTime.Format(report.CreatedAt)}";
+                    var caption = $"<b>{TelegramHtml.Encode(report.Title)}</b>\n\n{TelegramHtml.Encode(fileName)}\n\nДата: {AppDateTime.Format(report.CreatedAt)}";
 
                     if (!string.IsNullOrEmpty(report.FilePath))
                     {
