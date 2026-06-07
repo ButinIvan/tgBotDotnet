@@ -1,11 +1,14 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "tgSchoolBot", "tgSchoolBot\tgSchoolBot.csproj", "{3B164CE8-1885-418D-8D3C-173C713E0259}"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{BCA03E9C-F362-4E0D-8752-034ACFC3CEE4}"
 	ProjectSection(SolutionItems) = preProject
 		compose.yaml = compose.yaml
 	EndProjectSection
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "tgSchoolBot.Tests", "tgSchoolBot.Tests\tgSchoolBot.Tests.csproj", "{9A608AAF-A400-48EF-A7B3-BC0508ACC99E}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -17,5 +20,9 @@ Global
 		{3B164CE8-1885-418D-8D3C-173C713E0259}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{3B164CE8-1885-418D-8D3C-173C713E0259}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{3B164CE8-1885-418D-8D3C-173C713E0259}.Release|Any CPU.Build.0 = Release|Any CPU
+		{9A608AAF-A400-48EF-A7B3-BC0508ACC99E}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{9A608AAF-A400-48EF-A7B3-BC0508ACC99E}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{9A608AAF-A400-48EF-A7B3-BC0508ACC99E}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{9A608AAF-A400-48EF-A7B3-BC0508ACC99E}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal
