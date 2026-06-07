@@ -57,7 +57,7 @@ public class NewsController : Controller
             return RedirectToAction("Login", "Account");
         }
 
-        var classes = await GetOwnedClasses(telegramUserId);
+        var classes = await GetManageableClasses(user);
 
         if (!classes.Any())
         {
@@ -89,10 +89,9 @@ public class NewsController : Controller
 
         if (ModelState.IsValid)
         {
-            var ownedClass = await _context.Classes
-                .FirstOrDefaultAsync(c => c.Id == news.ClassId && c.AdminTelegramUserId == telegramUserId);
+            var canManageClass = await CanManageClass(user, news.ClassId);
 
-            if (ownedClass == null)
+            if (!canManageClass)
             {
                 ModelState.AddModelError(string.Empty, "Выберите класс, которым вы управляете.");
             }
@@ -144,7 +143,7 @@ public class NewsController : Controller
             }
         }
 
-        var classes = await GetOwnedClasses(telegramUserId);
+        var classes = await GetManageableClasses(user);
         ViewBag.Classes = BuildClassSelectList(classes);
         return View(news);
     }
@@ -161,7 +160,7 @@ public class NewsController : Controller
             return RedirectToAction("Login", "Account");
         }
 
-        var ownedClasses = await GetOwnedClasses(telegramUserId);
+        var ownedClasses = await GetManageableClasses(user);
         var ownedClassIds = ownedClasses.Select(c => c.Id).ToHashSet();
 
         var news = await _context.News
@@ -194,7 +193,7 @@ public class NewsController : Controller
             return NotFound();
         }
 
-        var ownedClasses = await GetOwnedClasses(telegramUserId);
+        var ownedClasses = await GetManageableClasses(user);
         var ownedClassIds = ownedClasses.Select(c => c.Id).ToHashSet();
 
         var existingNews = await _context.News
@@ -207,10 +206,9 @@ public class NewsController : Controller
 
         if (ModelState.IsValid)
         {
-            var ownedClass = await _context.Classes
-                .FirstOrDefaultAsync(c => c.Id == news.ClassId && c.AdminTelegramUserId == telegramUserId);
+            var canManageClass = await CanManageClass(user, news.ClassId);
 
-            if (ownedClass == null)
+            if (!canManageClass)
             {
                 ModelState.AddModelError(string.Empty, "Выберите класс, которым вы управляете.");
             }
@@ -243,13 +241,12 @@ public class NewsController : Controller
             return RedirectToAction("Login", "Account");
         }
 
-        var ownedClassesIds = await _context.Classes
-            .Where(c => c.AdminTelegramUserId == telegramUserId)
+        var manageableClassIds = (await GetManageableClasses(user))
             .Select(c => c.Id)
-            .ToListAsync();
+            .ToHashSet();
 
         var news = await _context.News
-            .FirstOrDefaultAsync(n => n.Id == id && ownedClassesIds.Contains(n.ClassId));
+            .FirstOrDefaultAsync(n => n.Id == id && manageableClassIds.Contains(n.ClassId));
 
         if (news != null)
         {
@@ -272,12 +269,38 @@ public class NewsController : Controller
         return RedirectToAction("Index", "Home");
     }
 
-    private async Task<List<Class>> GetOwnedClasses(long telegramUserId)
+    private async Task<List<Class>> GetManageableClasses(User user)
     {
-        return await _context.Classes
-            .Where(c => c.AdminTelegramUserId == telegramUserId)
+        var classes = await _context.Classes
+            .Where(c => c.AdminTelegramUserId == user.TelegramUserId)
             .OrderBy(c => c.Name)
             .ToListAsync();
+
+        if (user.Role == UserRole.Moderator && user.ClassId.HasValue)
+        {
+            var moderatorClass = await _context.Classes
+                .FirstOrDefaultAsync(c => c.Id == user.ClassId.Value);
+
+            if (moderatorClass != null && classes.All(c => c.Id != moderatorClass.Id))
+            {
+                classes.Add(moderatorClass);
+            }
+        }
+
+        return classes
+            .OrderBy(c => c.Name)
+            .ToList();
+    }
+
+    private async Task<bool> CanManageClass(User user, int classId)
+    {
+        if (user.Role == UserRole.Moderator && user.ClassId == classId)
+        {
+            return true;
+        }
+
+        return await _context.Classes
+            .AnyAsync(c => c.Id == classId && c.AdminTelegramUserId == user.TelegramUserId);
     }
 
     private static List<SelectListItem> BuildClassSelectList(IEnumerable<Class> classes, int? selectedClassId = null)
