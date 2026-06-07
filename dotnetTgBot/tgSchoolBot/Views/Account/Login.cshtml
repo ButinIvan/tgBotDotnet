@@ -25,6 +25,7 @@
                         }
 
                         <form method="post" action="/Account/Login">
+                            @Html.AntiForgeryToken()
                             <div class="mb-3">
                                 <label for="telegramUserId" class="form-label">Telegram User ID</label>
                                 <input type="text" class="form-control" id="telegramUserId" name="telegramUserId" required>

@@ -26,9 +26,10 @@ public class AccountController : Controller
     }
 
     [HttpPost]
+    [ValidateAntiForgeryToken]
     public async Task<IActionResult> Login(string telegramUserId)
     {
-        if (string.IsNullOrEmpty(telegramUserId) || !long.TryParse(telegramUserId, out var userId))
+        if (string.IsNullOrWhiteSpace(telegramUserId) || !long.TryParse(telegramUserId, out var userId))
         {
             ViewBag.Error = "Неверный Telegram User ID";
             return View();
@@ -45,16 +46,16 @@ public class AccountController : Controller
 
         if (user == null || (user.Role != UserRole.Admin && user.Role != UserRole.Moderator))
         {
-            ViewBag.Error = "У вас нет доступа к админ-панели. Только администраторы и модераторы могут войти.";
+            ViewBag.Error = "У вас нет доступа к админ-панели. Войти могут только администраторы и модераторы.";
             return View();
         }
 
         var claims = new List<Claim>
         {
-            new Claim(ClaimTypes.Name, user.TelegramUserId.ToString()),
-            new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
-            new Claim("Role", user.Role.ToString()),
-            new Claim("ClassId", user.ClassId?.ToString() ?? "")
+            new(ClaimTypes.Name, user.TelegramUserId.ToString()),
+            new(ClaimTypes.NameIdentifier, user.Id.ToString()),
+            new("Role", user.Role.ToString()),
+            new("ClassId", user.ClassId?.ToString() ?? string.Empty)
         };
 
         var claimsIdentity = new ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme);
@@ -73,10 +74,10 @@ public class AccountController : Controller
     }
 
     [HttpPost]
+    [ValidateAntiForgeryToken]
     public async Task<IActionResult> Logout()
     {
         await HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
         return RedirectToAction("Login");
     }
 }
-
