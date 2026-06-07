@@ -46,7 +46,7 @@ else
                             <span class="badge @(news.Type == NewsType.News ? "bg-info" : "bg-warning")">
                                 @(news.Type == NewsType.News ? "Новость" : "Отчет")
                             </span>
-                            <small class="text-muted">@news.CreatedAt.ToString("dd.MM.yyyy HH:mm")</small>
+                            <small class="text-muted">@AppDateTime.Format(news.CreatedAt)</small>
                         </div>
                         <div class="card-body">
                             <h5 class="card-title">@news.Title</h5>

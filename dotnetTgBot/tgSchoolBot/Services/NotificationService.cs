@@ -1,6 +1,5 @@
 using Telegram.Bot;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Logging;
 using dotnetTgBot.Models;
 using dotnetTgBot.Persistence;
 
@@ -28,11 +27,11 @@ public class NotificationService
             .Where(u => u.ClassId == news.ClassId && u.Role == UserRole.Parent && u.IsVerified)
             .ToListAsync();
 
-        var typeText = news.Type == NewsType.News ? "📰 Новость" : "📊 Отчет";
+        var typeText = news.Type == NewsType.News ? "Новость" : "Отчет";
         var message = $"{typeText}\n\n" +
                      $"<b>{news.Title}</b>\n\n" +
                      $"{news.Content}\n\n" +
-                     $"Дата: {news.CreatedAt:dd.MM.yyyy HH:mm}";
+                     $"Дата: {AppDateTime.Format(news.CreatedAt)}";
 
         foreach (var parent in parents)
         {
@@ -46,9 +45,8 @@ public class NotificationService
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, $"Не удалось отправить новость родителю {parent.TelegramUserId}");
+                _logger.LogError(ex, "Failed to send notification to parent {TelegramUserId}", parent.TelegramUserId);
             }
         }
     }
 }
-

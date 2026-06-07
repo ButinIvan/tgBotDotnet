@@ -26,7 +26,7 @@ else if (Model != null && Model.Any())
                 <div class="card">
                     <div class="card-header">
                         <strong>Заявка #@verification.Id</strong>
-                        <small class="text-muted float-end">@verification.CreatedAt.ToString("dd.MM.yyyy HH:mm")</small>
+                        <small class="text-muted float-end">@AppDateTime.Format(verification.CreatedAt)</small>
                     </div>
                     <div class="card-body">
                         <p><strong>ФИО:</strong> @verification.FullName</p>

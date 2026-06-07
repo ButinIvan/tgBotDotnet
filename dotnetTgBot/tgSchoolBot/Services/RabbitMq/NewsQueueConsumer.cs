@@ -1,4 +1,4 @@
-using System.Text;
+﻿using System.Text;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -104,9 +104,8 @@ public class NewsQueueConsumer : BackgroundService
             .Distinct()
             .ToListAsync(cancellationToken);
 
-        var localDate = message.CreatedAtUtc.AddHours(3);
         var content = (message.Content ?? string.Empty).TrimEnd();
-        var text = $"<b>{message.Title}</b>\n\n{content}\n\nДата: {localDate:dd.MM.yyyy HH:mm}";
+        var text = $"<b>{message.Title}</b>\n\n{content}\n\nДата: {AppDateTime.Format(message.CreatedAtUtc)}";
 
         foreach (var tgId in recipients)
         {
@@ -120,7 +119,7 @@ public class NewsQueueConsumer : BackgroundService
             }
             catch (Exception ex)
             {
-                logger.LogError(ex, $"Не удалось отправить новость пользователю {tgId}");
+                logger.LogError(ex, "Failed to send news to Telegram user {TelegramUserId}", tgId);
             }
         }
     }

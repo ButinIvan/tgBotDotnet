@@ -37,6 +37,7 @@ Optional public URLs:
 
 - `ADMIN_PANEL_URL` is shown by the bot in `/adminpanel`.
 - `MINIO_PUBLIC_ENDPOINT` is used when generating public report download links.
+- `APP_TIME_ZONE` controls displayed dates. The default is `Europe/Moscow`.
 
 ## Run With Docker
 
